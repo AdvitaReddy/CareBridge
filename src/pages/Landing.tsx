@@ -1,8 +1,6 @@
 import { Heart, Pill, Calendar, AlertTriangle, Users, ArrowRight, ShieldCheck, Clock, Phone } from 'lucide-react';
 import Disclaimer from '@/components/Disclaimer';
 import Bridgey from '@/components/Bridgey';
-import { supabase } from '../supabaseClient';
-console.log('Supabase connected:', supabase);
 
 interface LandingProps {
   onEnter: () => void;
