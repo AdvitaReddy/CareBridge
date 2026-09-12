@@ -1,0 +1,49 @@
+<svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#FFE9A8" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#FFE9A8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FF9A7A"/>
+      <stop offset="100%" stop-color="#FF7A5C"/>
+    </linearGradient>
+    <linearGradient id="smallHeartGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFD166"/>
+      <stop offset="100%" stop-color="#F4B942"/>
+    </linearGradient>
+  </defs>
+  <circle cx="200" cy="190" r="150" fill="url(#glow)"/>
+  <ellipse cx="200" cy="335" rx="85" ry="13" fill="#FF7A5C" opacity="0.18"/>
+  <ellipse cx="168" cy="322" rx="16" ry="9" fill="#E85D4C"/>
+  <ellipse cx="232" cy="322" rx="16" ry="9" fill="#E85D4C"/>
+  <path d="M 275 235 C 300 250, 305 275, 285 295" stroke="#FF7A5C" stroke-width="17" fill="none" stroke-linecap="round"/>
+  <circle cx="283" cy="297" r="12" fill="#FF7A5C"/>
+  <path d="M 200 300 C 130 250, 90 205, 90 160 C 90 120, 120 95, 155 95 C 178 95, 195 108, 200 128 C 205 108, 222 95, 245 95 C 280 95, 310 120, 310 160 C 310 205, 270 250, 200 300 Z" fill="url(#bodyGrad)"/>
+  <path d="M 130 150 C 128 122, 148 105, 170 108 C 150 118, 138 135, 140 160 C 137 158, 132 155, 130 150 Z" fill="#FFC1AC" opacity="0.7"/>
+  <ellipse cx="160" cy="185" rx="14" ry="9" fill="#E85D4C" opacity="0.5"/>
+  <ellipse cx="240" cy="185" rx="14" ry="9" fill="#E85D4C" opacity="0.5"/>
+  <g id="bridgey-happy-eyes" stroke="#2D2A3D" stroke-width="5" fill="none" stroke-linecap="round">
+    <path d="M 165 165 Q 175 155 185 165"/>
+    <path d="M 215 165 Q 225 155 235 165"/>
+  </g>
+  <g id="bridgey-excited-eyes" fill="#2D2A3D">
+    <circle cx="175" cy="162" r="8"/>
+    <circle cx="225" cy="162" r="8"/>
+  </g>
+  <g id="bridgey-sleepy-eyes" stroke="#2D2A3D" stroke-width="5" fill="none" stroke-linecap="round">
+    <path d="M 165 166 Q 175 175 185 166"/>
+    <path d="M 215 166 Q 225 175 235 166"/>
+  </g>
+  <path id="bridgey-normal-mouth" d="M 178 195 Q 200 212 222 195" stroke="#2D2A3D" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path id="bridgey-serious-mouth" d="M 180 202 L 220 202" stroke="#2D2A3D" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path id="bridgey-relieved-mouth" d="M 180 198 Q 200 207 220 198" stroke="#2D2A3D" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path id="bridgey-left-arm" d="M 125 235 C 100 250, 95 270, 112 288" stroke="#FF9A7A" stroke-width="17" fill="none" stroke-linecap="round"/>
+  <circle cx="114" cy="290" r="12" fill="#FF9A7A"/>
+  <path id="bridgey-small-heart" d="M 200 260 C 180 242, 160 244, 158 262 C 156 278, 178 292, 200 305 C 222 292, 244 278, 242 262 C 240 244, 220 242, 200 260 Z" fill="url(#smallHeartGrad)"/>
+  <circle cx="185" cy="265" r="3" fill="#FFF6DA"/>
+  <path d="M 335 130 l 4 11 l 11 4 l -11 4 l -4 11 l -4 -11 l -11 -4 l 11 -4 z" fill="#FFD166"/>
+  <path d="M 60 110 l 3 8 l 8 3 l -8 3 l -3 8 l -3 -8 l -8 -3 l 8 -3 z" fill="#F4B942"/>
+  <circle cx="330" cy="230" r="5" fill="#FFD166" opacity="0.8"/>
+  <circle cx="70" cy="250" r="4" fill="#F4B942" opacity="0.8"/>
+</svg>
