@@ -20,7 +20,7 @@ export default function SummaryModal({ appointmentId, doctorName, onClose }: Sum
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-900/50 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg-dark/60 backdrop-blur-sm animate-fade-in">
       <div className="card w-full max-w-md p-6 animate-slide-up">
         <div className="flex items-center justify-between mb-5">
           <div>
@@ -44,13 +44,13 @@ export default function SummaryModal({ appointmentId, doctorName, onClose }: Sum
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2.5 rounded-xl border border-neutral-200 text-neutral-600 font-medium hover:bg-neutral-50 transition-colors"
+              className="flex-1 btn-outline px-4 py-2.5"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2.5 rounded-xl bg-primary-500 text-white font-semibold hover:bg-primary-600 transition-colors"
+              className="flex-1 btn-primary px-4 py-2.5"
             >
               Save Summary
             </button>

@@ -1,6 +1,7 @@
 import { Heart, User, Users, Stethoscope, Shield, ArrowRight, ArrowLeft } from 'lucide-react';
 import type { Role } from '@/data/mockData';
 import Disclaimer from '@/components/Disclaimer';
+import Bridgey from '@/components/Bridgey';
 
 interface RoleSelectionProps {
   onSelect: (role: Role) => void;
@@ -21,7 +22,7 @@ const roles: {
     title: 'Elderly Person',
     desc: 'The care recipient',
     icon: User,
-    gradient: 'from-primary-500 to-primary-600',
+    gradient: 'from-primary-400 to-primary-600',
     iconBg: 'bg-primary-100 text-primary-600',
     features: ['Large, simple interface', 'Today\'s medicines', 'One-tap SOS button'],
   },
@@ -30,7 +31,7 @@ const roles: {
     title: 'Family Member',
     desc: 'A distant relative',
     icon: Users,
-    gradient: 'from-secondary-500 to-secondary-600',
+    gradient: 'from-secondary-400 to-secondary-600',
     iconBg: 'bg-secondary-100 text-secondary-600',
     features: ['Full dashboard with tabs', 'Timeline & SOS history', 'Manage medicines & appointments'],
   },
@@ -48,7 +49,7 @@ const roles: {
     title: 'Admin',
     desc: 'Platform administrator',
     icon: Shield,
-    gradient: 'from-neutral-700 to-neutral-600',
+    gradient: 'from-neutral-800 to-neutral-600',
     iconBg: 'bg-neutral-100 text-neutral-600',
     features: ['User management', 'Caregiver verification', 'Platform statistics'],
   },
@@ -56,11 +57,11 @@ const roles: {
 
 export default function RoleSelection({ onSelect, onBack }: RoleSelectionProps) {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-primary-50 via-white to-secondary-50">
-      <nav className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
+    <div className="min-h-screen bg-gradient-to-b from-primary-100 via-primary-50 to-tertiary-50 dark:from-bg-dark dark:via-bg-dark dark:to-surface-dark">
+      <nav className="max-w-7xl mx-auto px-6 md:px-12 py-5 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center">
-            <Heart className="w-6 h-6 text-white" fill="currentColor" />
+          <div className="w-10 h-10 rounded-xl bg-primary text-primary-text flex items-center justify-center shadow-md">
+            <Heart className="w-6 h-6" fill="currentColor" />
           </div>
           <span className="font-display font-bold text-xl text-neutral-800">CareBridge</span>
         </div>
@@ -73,7 +74,7 @@ export default function RoleSelection({ onSelect, onBack }: RoleSelectionProps) 
         </button>
       </nav>
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+      <div className="max-w-7xl mx-auto px-6 md:px-12 py-8 sm:py-12">
         <div className="text-center mb-10">
           <h1 className="font-display font-extrabold text-2xl sm:text-4xl text-neutral-800">
             Who are you?
@@ -81,6 +82,13 @@ export default function RoleSelection({ onSelect, onBack }: RoleSelectionProps) 
           <p className="text-neutral-500 mt-3 max-w-lg mx-auto">
             Choose a role to explore the matching dashboard. You can switch roles anytime.
           </p>
+          <div className="bridgey-landing-intro mt-6" aria-label="Bridgey welcome">
+            <Bridgey expression="happy" size="md" floating={false} interactive={false} showTips={false} />
+            <div className="bridgey-landing-intro__bubble">
+              <span>Meet Bridgey</span>
+               <p>Choose your place in the care circle, and I&apos;ll guide you from there.</p>
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">

@@ -23,12 +23,18 @@ import {
   seedCareCircle,
   seedCaregiverTasks,
   seedAdminUsers,
+  formatClockTime,
 } from '@/data/mockData';
 
 interface AppContextValue {
   // Role
   currentRole: Role | null;
   setCurrentRole: (role: Role | null) => void;
+  bridgeySection: string;
+  setBridgeySection: (section: string) => void;
+  bridgeyEvent: { type: 'medicine-taken' | 'medicines-complete' | 'appointment-added' | 'caregiver-added' | 'task-completed' | 'sos-triggered' | 'sos-resolved'; id: number } | null;
+  sosConfirmationOpen: boolean;
+  setSosConfirmationOpen: (open: boolean) => void;
 
   // Medicines
   medicines: Medicine[];
@@ -75,6 +81,11 @@ interface AppContextValue {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
+function getStoredRole(): Role | null {
+  const role = window.sessionStorage.getItem('carebridge-active-role');
+  return role === 'elderly' || role === 'family' || role === 'caregiver' || role === 'admin' ? role : null;
+}
+
 let idCounter = 1000;
 function genId(prefix: string): string {
   idCounter++;
@@ -82,7 +93,10 @@ function genId(prefix: string): string {
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [currentRole, setCurrentRole] = useState<Role | null>(null);
+  const [currentRole, setCurrentRoleState] = useState<Role | null>(getStoredRole);
+  const [bridgeySection, setBridgeySection] = useState('landing');
+  const [bridgeyEvent, setBridgeyEvent] = useState<AppContextValue['bridgeyEvent']>(null);
+  const [sosConfirmationOpen, setSosConfirmationOpen] = useState(false);
   const [medicines, setMedicines] = useState<Medicine[]>(seedMedicines);
   const [appointments, setAppointments] = useState<Appointment[]>(seedAppointments);
   const [sosEvents, setSosEvents] = useState<SOSEvent[]>(seedSOSEvents);
@@ -93,6 +107,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>(seedAdminUsers);
 
   const activeSOS = sosEvents.find((s) => s.status === 'active') ?? null;
+
+  const setCurrentRole = useCallback((role: Role | null) => {
+    setCurrentRoleState(role);
+    if (role) window.sessionStorage.setItem('carebridge-active-role', role);
+    else window.sessionStorage.removeItem('carebridge-active-role');
+  }, []);
 
   const addTimelineEntry = useCallback((entry: Omit<TimelineEntry, 'id'>) => {
     const newEntry: TimelineEntry = { ...entry, id: genId('t') };
@@ -106,6 +126,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       );
       const med = medicines.find((m) => m.id === id);
       if (med) {
+        const allMedicinesTaken = medicines.length > 0 && medicines.every((medicine) =>
+          medicine.id === id || medicine.status === 'taken'
+        );
+        setBridgeyEvent({ type: allMedicinesTaken ? 'medicines-complete' : 'medicine-taken', id: Date.now() });
         addTimelineEntry({
           type: 'medicine',
           title: `${med.name} ${med.dosage} taken`,
@@ -144,7 +168,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addTimelineEntry({
         type: 'medicine',
         title: `New medicine added: ${med.name} ${med.dosage}`,
-        description: `${med.frequency} at ${med.times.join(', ')}`,
+        description: `${med.frequency} at ${med.times.map(formatClockTime).join(', ')}`,
         timestamp: new Date().toISOString(),
         status: 'pending',
       });
@@ -158,10 +182,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setAppointments((prev) =>
         [...prev, newAppt].sort((a, b) => a.date.localeCompare(b.date))
       );
+      setBridgeyEvent({ type: 'appointment-added', id: Date.now() });
       addTimelineEntry({
         type: 'appointment',
         title: `Appointment scheduled: ${appt.doctorName}`,
-        description: `${appt.specialty} on ${appt.date} at ${appt.time}, ${appt.location}`,
+        description: `${appt.specialty} on ${appt.date} at ${formatClockTime(appt.time)}, ${appt.location}`,
         timestamp: new Date().toISOString(),
         status: 'upcoming',
       });
@@ -195,6 +220,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       status: 'active',
     };
     setSosEvents((prev) => [newEvent, ...prev]);
+    setBridgeyEvent({ type: 'sos-triggered', id: Date.now() });
     addTimelineEntry({
       type: 'sos',
       title: 'SOS Alert Triggered',
@@ -212,6 +238,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           s.id === id ? { ...s, status: 'resolved' as const, resolvedAt, resolvedBy } : s
         )
       );
+      setBridgeyEvent({ type: 'sos-resolved', id: Date.now() });
       addTimelineEntry({
         type: 'sos',
         title: 'SOS Resolved',
@@ -240,6 +267,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             type: 'caregiver' as const,
           },
         ]);
+        setBridgeyEvent({ type: 'caregiver-added', id: Date.now() });
         addTimelineEntry({
           type: 'caregiver',
           title: `Caregiver added: ${cg.name}`,
@@ -269,10 +297,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const toggleTask = useCallback((id: string) => {
+    const task = caregiverTasks.find((item) => item.id === id);
+    if (task && !task.done) setBridgeyEvent({ type: 'task-completed', id: Date.now() });
     setCaregiverTasks((prev) =>
       prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t))
     );
-  }, []);
+  }, [caregiverTasks]);
 
   const approveUser = useCallback((id: string) => {
     setAdminUsers((prev) =>
@@ -297,6 +327,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value: AppContextValue = {
     currentRole,
     setCurrentRole,
+    bridgeySection,
+    setBridgeySection,
+    bridgeyEvent,
+    sosConfirmationOpen,
+    setSosConfirmationOpen,
     medicines,
     markMedicineTaken,
     simulateMissedDose,

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Clock, Calendar, Pill, AlertTriangle, Users, Heart, Plus, Search,
   Star, MapPin, CheckCircle2, UserPlus, Activity, FileText,
@@ -15,6 +15,7 @@ import AddMedicineModal from '@/components/AddMedicineModal';
 import AddAppointmentModal from '@/components/AddAppointmentModal';
 import SummaryModal from '@/components/SummaryModal';
 import InviteModal from '@/components/InviteModal';
+import BridgeyHero from '@/components/BridgeyHero';
 
 type Tab = 'timeline' | 'medicines' | 'appointments' | 'caregivers' | 'sos';
 
@@ -26,7 +27,7 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
   const {
     timeline, medicines, appointments, sosEvents, caregivers, careCircle,
     markMedicineTaken, simulateMissedDose, requestCaregiver,
-    activeSOS, addTimelineEntry,
+    activeSOS, addTimelineEntry, setBridgeySection,
   } = useApp();
   const familyMemberName = familyMember.name;
   const elderlyName = elderlyPerson.name;
@@ -49,6 +50,11 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
     c.specialty.toLowerCase().includes(caregiverSearch.toLowerCase()) ||
     c.location.toLowerCase().includes(caregiverSearch.toLowerCase())
   );
+  const familyHeroMessage = activeSOS
+    ? 'An SOS needs attention right now. Your care circle has been alerted.'
+    : missedMeds.length > 0
+      ? `Heads up — ${missedMeds.length} dose${missedMeds.length === 1 ? '' : 's'} was missed this morning.`
+      : `Everything looks good with ${elderlyName} today.`;
 
   const tabs: { id: Tab; label: string; icon: typeof Clock }[] = [
     { id: 'timeline', label: 'Timeline', icon: Clock },
@@ -57,6 +63,16 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
     { id: 'caregivers', label: 'Caregivers', icon: Users },
     { id: 'sos', label: 'SOS History', icon: AlertTriangle },
   ];
+
+  useEffect(() => {
+    if (activeTab === 'appointments' && upcomingAppts.length === 0) {
+      setBridgeySection('family-appointments-empty');
+    } else if (activeTab === 'medicines' && medicines.length === 0) {
+      setBridgeySection('family-medicines-empty');
+    } else {
+      setBridgeySection('family');
+    }
+  }, [activeTab, medicines.length, upcomingAppts.length, setBridgeySection]);
 
   const handleAddNote = () => {
     if (!healthNote.trim()) return;
@@ -70,7 +86,7 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50">
+    <div className="min-h-screen bg-primary-50 dark:bg-bg-dark">
       <DashboardHeader
         role="family"
         title={`${familyMemberName} · Family Dashboard`}
@@ -78,7 +94,15 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
         onBack={onBack}
       />
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
+      <div className="lg:ml-64 max-w-7xl mx-auto px-6 md:px-12 pt-6">
+        <BridgeyHero
+          eyebrow="Care circle update"
+          message={familyHeroMessage}
+          expression={activeSOS || missedMeds.length > 0 ? 'concerned' : 'happy'}
+        />
+      </div>
+
+      <div className="lg:ml-64 max-w-7xl mx-auto px-6 md:px-12 py-6">
         {/* SOS Banner */}
         {activeSOS && (
           <div className="mb-6">
@@ -102,7 +126,7 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
         )}
 
         {/* Tabs */}
-        <div className="flex gap-1 sm:gap-2 overflow-x-auto border-b border-neutral-200 mb-6 -mx-4 px-4 sm:mx-0 sm:px-0">
+        <div className="flex gap-1 sm:gap-2 overflow-x-auto border-b border-neutral-200 mb-6 -mx-6 px-6 md:mx-0 md:px-0">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -184,7 +208,7 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
               <h3 className="font-display font-bold text-lg text-neutral-800">Medicine Schedule</h3>
               <button
                 onClick={() => setShowAddMed(true)}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary-500 text-white font-semibold text-sm hover:bg-primary-600 transition-colors"
+                className="btn-primary inline-flex items-center gap-1.5 text-sm"
               >
                 <Plus className="w-4 h-4" />
                 Add Medicine
@@ -211,7 +235,7 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
               <h3 className="font-display font-bold text-lg text-neutral-800">Upcoming Appointments</h3>
               <button
                 onClick={() => setShowAddAppt(true)}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary-500 text-white font-semibold text-sm hover:bg-primary-600 transition-colors"
+                className="btn-primary inline-flex items-center gap-1.5 text-sm"
               >
                 <Plus className="w-4 h-4" />
                 Add Appointment

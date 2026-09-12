@@ -9,12 +9,12 @@ interface StatusBadgeProps {
 }
 
 const colorMap: Record<BadgeColor, string> = {
-  success: 'bg-success-100 text-success-700',
-  warning: 'bg-warning-100 text-warning-700',
-  danger: 'bg-danger-100 text-danger-700',
-  neutral: 'bg-neutral-100 text-neutral-600',
-  primary: 'bg-primary-100 text-primary-700',
-  accent: 'bg-accent-100 text-accent-700',
+  success: 'bg-success text-success-text',
+  warning: 'bg-primary text-primary-text',
+  danger: 'bg-danger text-danger-text',
+  neutral: 'bg-tertiary text-tertiary-text',
+  primary: 'bg-primary text-primary-text',
+  accent: 'bg-secondary text-secondary-text',
 };
 
 const iconMap: Record<string, typeof CheckCircle2> = {

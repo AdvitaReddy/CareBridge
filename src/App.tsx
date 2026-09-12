@@ -7,15 +7,20 @@ import ElderlyDashboard from '@/pages/ElderlyDashboard';
 import FamilyDashboard from '@/pages/FamilyDashboard';
 import CaregiverDashboard from '@/pages/CaregiverDashboard';
 import AdminDashboard from '@/pages/AdminDashboard';
+import BridgeyCelebration from '@/components/BridgeyCelebration';
 
 type Screen = 'landing' | 'role-select' | 'dashboard';
 
 function AppContent() {
-  const { currentRole, setCurrentRole } = useApp();
-  const [screen, setScreen] = useState<Screen>('landing');
+  const { currentRole, setCurrentRole, setBridgeySection } = useApp();
+  const [screen, setScreen] = useState<Screen>(() => (currentRole ? 'dashboard' : 'landing'));
 
-  const handleEnter = () => setScreen('role-select');
+  const handleEnter = () => {
+    setBridgeySection('role-select');
+    setScreen('role-select');
+  };
   const handleBackToLanding = () => {
+    setBridgeySection('landing');
     setScreen('landing');
     setCurrentRole(null);
   };
@@ -24,31 +29,32 @@ function AppContent() {
     setCurrentRole(null);
   };
   const handleSelectRole = (role: Role) => {
+    setBridgeySection(role);
     setCurrentRole(role);
     setScreen('dashboard');
   };
 
+  let page;
   if (screen === 'landing') {
-    return <Landing onEnter={handleEnter} />;
+    page = <Landing onEnter={handleEnter} />;
+  } else if (screen === 'role-select') {
+    page = <RoleSelection onSelect={handleSelectRole} onBack={handleBackToLanding} />;
+  } else {
+    switch (currentRole) {
+      case 'elderly': page = <ElderlyDashboard onBack={handleBackToRoles} />; break;
+      case 'family': page = <FamilyDashboard onBack={handleBackToRoles} />; break;
+      case 'caregiver': page = <CaregiverDashboard onBack={handleBackToRoles} />; break;
+      case 'admin': page = <AdminDashboard onBack={handleBackToRoles} />; break;
+      default: page = <RoleSelection onSelect={handleSelectRole} onBack={handleBackToLanding} />;
+    }
   }
 
-  if (screen === 'role-select') {
-    return <RoleSelection onSelect={handleSelectRole} onBack={handleBackToLanding} />;
-  }
-
-  // Dashboard
-  switch (currentRole) {
-    case 'elderly':
-      return <ElderlyDashboard onBack={handleBackToRoles} />;
-    case 'family':
-      return <FamilyDashboard onBack={handleBackToRoles} />;
-    case 'caregiver':
-      return <CaregiverDashboard onBack={handleBackToRoles} />;
-    case 'admin':
-      return <AdminDashboard onBack={handleBackToRoles} />;
-    default:
-      return <RoleSelection onSelect={handleSelectRole} onBack={handleBackToLanding} />;
-  }
+  return (
+    <>
+      {page}
+      <BridgeyCelebration />
+    </>
+  );
 }
 
 export default function App() {

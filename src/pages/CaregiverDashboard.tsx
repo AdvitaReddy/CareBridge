@@ -4,10 +4,11 @@ import {
   MapPin, Stethoscope, Pill, Check, User,
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
-import { primaryCaregiver, elderlyPerson, formatDate } from '@/data/mockData';
+import { primaryCaregiver, elderlyPerson, formatClockTime, formatDate } from '@/data/mockData';
 import DashboardHeader from '@/components/DashboardHeader';
 import SOSBanner from '@/components/SOSBanner';
 import Disclaimer from '@/components/Disclaimer';
+import BridgeyHero from '@/components/BridgeyHero';
 
 interface CaregiverDashboardProps {
   onBack: () => void;
@@ -39,7 +40,7 @@ export default function CaregiverDashboard({ onBack }: CaregiverDashboardProps) 
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50">
+    <div className="min-h-screen bg-primary-50 dark:bg-bg-dark">
       <DashboardHeader
         role="caregiver"
         title={`${primaryCaregiver.name} · Caregiver`}
@@ -47,7 +48,15 @@ export default function CaregiverDashboard({ onBack }: CaregiverDashboardProps) 
         onBack={onBack}
       />
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
+      <div className="lg:ml-64 max-w-7xl mx-auto px-6 md:px-12 pt-6">
+        <BridgeyHero
+          eyebrow="Your care shift"
+          message={activeSOS ? 'An alert needs your attention right now.' : `You have ${pendingTasks.length} task${pendingTasks.length === 1 ? '' : 's'} today.`}
+          expression={activeSOS ? 'concerned' : pendingTasks.length === 0 ? 'relieved' : 'happy'}
+        />
+      </div>
+
+      <div className="lg:ml-64 max-w-7xl mx-auto px-6 md:px-12 py-6">
         {/* SOS Banner */}
         {activeSOS && (
           <div className="mb-6">
@@ -82,7 +91,7 @@ export default function CaregiverDashboard({ onBack }: CaregiverDashboardProps) 
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 sm:gap-2 overflow-x-auto border-b border-neutral-200 mb-6 -mx-4 px-4 sm:mx-0 sm:px-0">
+        <div className="flex gap-1 sm:gap-2 overflow-x-auto border-b border-neutral-200 mb-6 -mx-6 px-6 md:mx-0 md:px-0">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -133,7 +142,7 @@ export default function CaregiverDashboard({ onBack }: CaregiverDashboardProps) 
                       <p className="text-sm text-neutral-500 mt-1">{task.description}</p>
                       <div className="flex items-center gap-2 mt-2">
                         <Clock className="w-4 h-4 text-neutral-400" />
-                        <span className="text-xs text-neutral-500">{task.time}</span>
+                        <span className="text-xs text-neutral-500">{formatClockTime(task.time)}</span>
                         {task.done && (
                           <span className="text-xs text-success-600 font-medium flex items-center gap-1">
                             <Check className="w-3.5 h-3.5" />
@@ -167,7 +176,7 @@ export default function CaregiverDashboard({ onBack }: CaregiverDashboardProps) 
                     </div>
                     <div className="flex-1">
                       <p className="font-semibold text-sm text-neutral-800">{med.name} {med.dosage}</p>
-                      <p className="text-xs text-neutral-500">{med.frequency} · {med.times.join(', ')}</p>
+                      <p className="text-xs text-neutral-500">{med.frequency} · {med.times.map(formatClockTime).join(', ')}</p>
                     </div>
                     <span className={`badge ${med.status === 'taken' ? 'bg-success-100 text-success-700' : 'bg-warning-100 text-warning-700'}`}>
                       {med.status}
@@ -194,7 +203,7 @@ export default function CaregiverDashboard({ onBack }: CaregiverDashboardProps) 
                         <p className="text-xs text-neutral-500">{appt.specialty}</p>
                         <p className="text-xs text-neutral-500 mt-1 flex items-center gap-1">
                           <Calendar className="w-3.5 h-3.5" />
-                          {formatDate(appt.date)} at {appt.time}
+                          {formatDate(appt.date)} at {formatClockTime(appt.time)}
                         </p>
                         <p className="text-xs text-neutral-500 flex items-center gap-1">
                           <MapPin className="w-3.5 h-3.5" />
