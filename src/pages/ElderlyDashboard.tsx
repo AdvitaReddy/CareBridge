@@ -1,17 +1,18 @@
 import { useState } from 'react';
 import { AlertTriangle, Pill, Calendar, Check, Clock, MapPin } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
-import { elderlyPerson, appointmentBadge, formatDate } from '@/data/mockData';
+import { elderlyPerson, appointmentBadge, formatClockTime, formatDate } from '@/data/mockData';
 import DashboardHeader from '@/components/DashboardHeader';
 import MedicineCard from '@/components/MedicineCard';
 import Disclaimer from '@/components/Disclaimer';
+import BridgeyHero from '@/components/BridgeyHero';
 
 interface ElderlyDashboardProps {
   onBack: () => void;
 }
 
 export default function ElderlyDashboard({ onBack }: ElderlyDashboardProps) {
-  const { medicines, markMedicineTaken, appointments, triggerSOS, activeSOS } = useApp();
+  const { medicines, markMedicineTaken, appointments, triggerSOS, activeSOS, setSosConfirmationOpen } = useApp();
   const [showSOSConfirm, setShowSOSConfirm] = useState(false);
   const [sosTriggered, setSosTriggered] = useState(false);
 
@@ -19,22 +20,42 @@ export default function ElderlyDashboard({ onBack }: ElderlyDashboardProps) {
   const upcomingAppts = appointments
     .filter((a) => new Date(a.date + 'T00:00:00') >= new Date('2026-09-12T00:00:00'))
     .slice(0, 3);
+  const medicinesRemaining = todaysMeds.filter((medicine) => medicine.status !== 'taken').length;
+  const heroMessage = activeSOS
+    ? 'Your family has been notified. Stay with us, help is coming.'
+    : medicinesRemaining === 0
+      ? 'All done for today, great job!'
+      : `You have ${medicinesRemaining} medicine${medicinesRemaining === 1 ? '' : 's'} to take today.`;
 
   const handleSOS = () => {
     triggerSOS();
     setSosTriggered(true);
     setShowSOSConfirm(false);
+    setSosConfirmationOpen(false);
     setTimeout(() => setSosTriggered(false), 5000);
   };
 
+  const openSOSConfirmation = () => {
+    setShowSOSConfirm(true);
+    setSosConfirmationOpen(true);
+  };
+
   return (
-    <div className="min-h-screen bg-neutral-50">
+    <div className="min-h-screen bg-primary-50 dark:bg-bg-dark text-lg font-body">
       <DashboardHeader
         role="elderly"
         title={`Hello, ${elderlyPerson.name}`}
         subtitle={`${elderlyPerson.location} · Age ${elderlyPerson.age}`}
         onBack={onBack}
       />
+
+      <div className="max-w-7xl mx-auto px-6 md:px-12 pt-6">
+        <BridgeyHero
+          eyebrow={activeSOS ? 'Bridgey is staying close' : 'Your care companion'}
+          message={heroMessage}
+          expression={activeSOS ? 'concerned' : medicinesRemaining === 0 ? 'relieved' : 'happy'}
+        />
+      </div>
 
       {/* SOS triggered confirmation */}
       {sosTriggered && (
@@ -46,7 +67,7 @@ export default function ElderlyDashboard({ onBack }: ElderlyDashboardProps) {
 
       {/* Active SOS banner */}
       {activeSOS && (
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 mt-4">
+        <div className="max-w-7xl mx-auto px-6 md:px-12 mt-4">
           <div className="bg-danger-600 text-white rounded-2xl p-5 flex items-center gap-4">
             <AlertTriangle className="w-10 h-10 flex-shrink-0" />
             <div>
@@ -57,14 +78,14 @@ export default function ElderlyDashboard({ onBack }: ElderlyDashboardProps) {
         </div>
       )}
 
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-8">
+      <div className="max-w-7xl mx-auto px-6 md:px-12 py-6 space-y-8">
         {/* SOS Button */}
         <div className="text-center">
           <button
-            onClick={() => setShowSOSConfirm(true)}
+            onClick={openSOSConfirmation}
             disabled={!!activeSOS}
-            className={`w-48 h-48 mx-auto rounded-full bg-gradient-to-br from-danger-500 to-danger-700 text-white font-display font-bold text-3xl shadow-2xl flex flex-col items-center justify-center gap-2 ${
-              activeSOS ? 'opacity-50 cursor-not-allowed' : 'animate-pulse-sos hover:scale-105 transition-transform active:scale-95'
+            className={`w-48 h-48 mx-auto rounded-full bg-danger text-danger-text font-body font-bold text-3xl shadow-2xl flex flex-col items-center justify-center gap-2 ${
+              activeSOS ? 'opacity-50 cursor-not-allowed' : `${sosTriggered ? 'animate-sos-ripple' : ''} hover:scale-105 transition-transform active:scale-95`
             }`}
           >
             <AlertTriangle className="w-14 h-14" fill="currentColor" />
@@ -121,7 +142,7 @@ export default function ElderlyDashboard({ onBack }: ElderlyDashboardProps) {
                         <div className="mt-2 space-y-1.5">
                           <p className="text-base text-neutral-600 flex items-center gap-2">
                             <Clock className="w-5 h-5 text-neutral-400" />
-                            {formatDate(appt.date)} at {appt.time}
+                            {formatDate(appt.date)} at {formatClockTime(appt.time)}
                           </p>
                           <p className="text-base text-neutral-600 flex items-center gap-2">
                             <MapPin className="w-5 h-5 text-neutral-400" />
@@ -168,7 +189,10 @@ export default function ElderlyDashboard({ onBack }: ElderlyDashboardProps) {
             </p>
             <div className="flex gap-3">
               <button
-                onClick={() => setShowSOSConfirm(false)}
+                onClick={() => {
+                  setShowSOSConfirm(false);
+                  setSosConfirmationOpen(false);
+                }}
                 className="flex-1 px-6 py-4 rounded-2xl border border-neutral-200 text-neutral-600 font-bold text-lg hover:bg-neutral-50 transition-colors"
               >
                 Cancel

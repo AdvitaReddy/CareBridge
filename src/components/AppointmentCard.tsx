@@ -1,6 +1,6 @@
-import { Calendar, MapPin, Stethoscope, Clock, FileText } from 'lucide-react';
+import { Calendar, MapPin, Stethoscope, FileText } from 'lucide-react';
 import type { Appointment } from '@/data/mockData';
-import { appointmentBadge, formatDate } from '@/data/mockData';
+import { appointmentBadge, formatClockTime, formatDate } from '@/data/mockData';
 
 interface AppointmentCardProps {
   appointment: Appointment;
@@ -24,10 +24,10 @@ export default function AppointmentCard({ appointment, onAddSummary }: Appointme
             <span
               className={`badge ${
                 badge.color === 'danger'
-                  ? 'bg-danger-100 text-danger-700'
+                  ? 'bg-danger text-danger-text'
                   : badge.color === 'accent'
-                    ? 'bg-accent-100 text-accent-700'
-                    : 'bg-primary-100 text-primary-700'
+                    ? 'bg-tertiary text-tertiary-text'
+                    : 'bg-primary text-primary-text'
               }`}
             >
               {badge.label}
@@ -37,7 +37,7 @@ export default function AppointmentCard({ appointment, onAddSummary }: Appointme
           <div className="mt-3 space-y-1.5">
             <div className="flex items-center gap-2 text-sm text-neutral-600">
               <Calendar className="w-4 h-4 text-neutral-400" />
-              {formatDate(appointment.date)} at {appointment.time}
+              {formatDate(appointment.date)} at {formatClockTime(appointment.time)}
             </div>
             <div className="flex items-center gap-2 text-sm text-neutral-600">
               <MapPin className="w-4 h-4 text-neutral-400" />

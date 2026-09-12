@@ -1,5 +1,6 @@
 import { Heart, Pill, Calendar, AlertTriangle, Users, ArrowRight, ShieldCheck, Clock, Phone } from 'lucide-react';
 import Disclaimer from '@/components/Disclaimer';
+import Bridgey from '@/components/Bridgey';
 
 interface LandingProps {
   onEnter: () => void;
@@ -7,42 +8,49 @@ interface LandingProps {
 
 export default function Landing({ onEnter }: LandingProps) {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-primary-50 via-white to-secondary-50">
+    <div className="min-h-screen bg-gradient-to-b from-primary-100 via-primary-50 to-tertiary-50 dark:from-bg-dark dark:via-bg-dark dark:to-surface-dark">
       {/* Nav */}
-      <nav className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
+      <nav className="max-w-7xl mx-auto px-6 md:px-12 py-5 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center">
-            <Heart className="w-6 h-6 text-white" fill="currentColor" />
+          <div className="w-10 h-10 rounded-xl bg-primary text-primary-text flex items-center justify-center shadow-md">
+            <Heart className="w-6 h-6" fill="currentColor" />
           </div>
           <span className="font-display font-bold text-xl text-neutral-800">CareBridge</span>
         </div>
-        <button
-          onClick={onEnter}
-          className="px-5 py-2.5 rounded-xl bg-primary-500 text-white font-semibold text-sm hover:bg-primary-600 transition-colors flex items-center gap-2"
+        <a
+          href="#how-it-helps"
+          className="btn-outline px-5 py-2.5 text-sm flex items-center gap-2"
         >
-          Get Started
+          How it helps
           <ArrowRight className="w-4 h-4" />
-        </button>
+        </a>
       </nav>
 
       {/* Hero */}
-      <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-8 sm:pt-16 pb-12 sm:pb-20 text-center">
+      <section className="max-w-7xl mx-auto px-6 md:px-12 pt-8 sm:pt-16 pb-12 sm:pb-20 text-center">
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary-100 text-primary-700 text-sm font-medium mb-6 animate-fade-in">
           <ShieldCheck className="w-4 h-4" />
           Coordinated care for the whole family
         </div>
         <h1 className="font-display font-extrabold text-3xl sm:text-5xl lg:text-6xl text-neutral-800 leading-tight max-w-3xl mx-auto animate-slide-up">
-          Caring for your parents,
+          Caring for the people you love,
           <span className="bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent"> even from afar.</span>
         </h1>
         <p className="text-base sm:text-lg text-neutral-500 mt-6 max-w-2xl mx-auto leading-relaxed animate-slide-up">
-          Working professionals in cities like Hyderabad and Bengaluru worry about elderly parents
-          living alone in smaller towns. CareBridge unifies medicines, appointments, caregivers, and
-          emergencies into one shared platform — so no dose is missed and no call is forgotten.
+          When someone you love needs support from afar, the details can quickly become difficult to
+          keep track of. CareBridge brings medicines, appointments, caregivers, and emergencies into
+          one shared platform — so no dose is missed and no call is forgotten.
         </p>
+        <div className="bridgey-landing-intro animate-slide-up" aria-label="Bridgey welcome">
+          <Bridgey expression="happy" size="md" floating={false} interactive={false} showTips={false} />
+          <div className="bridgey-landing-intro__bubble">
+            <span>Meet Bridgey</span>
+            <p>A little care, shared well, goes a long way.</p>
+          </div>
+        </div>
         <button
           onClick={onEnter}
-          className="mt-8 px-8 py-4 rounded-2xl bg-gradient-to-r from-primary-500 to-secondary-500 text-white font-bold text-base sm:text-lg shadow-lg hover:shadow-xl transition-all active:scale-95 flex items-center gap-2 mx-auto animate-slide-up"
+          className="btn-secondary mt-8 px-8 py-4 text-base sm:text-lg flex items-center gap-2 mx-auto animate-slide-up"
         >
           Enter App
           <ArrowRight className="w-5 h-5" />
@@ -50,7 +58,7 @@ export default function Landing({ onEnter }: LandingProps) {
       </section>
 
       {/* Problem */}
-      <section className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
+      <section className="max-w-7xl mx-auto px-6 md:px-12 py-12">
         <div className="text-center mb-10">
           <h2 className="font-display font-bold text-2xl sm:text-3xl text-neutral-800">The problem today</h2>
           <p className="text-neutral-500 mt-3 max-w-xl mx-auto">
@@ -76,8 +84,8 @@ export default function Landing({ onEnter }: LandingProps) {
       </section>
 
       {/* Solution */}
-      <section className="bg-white py-16">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+      <section id="how-it-helps" className="bg-surface-light dark:bg-surface-dark py-16">
+        <div className="max-w-7xl mx-auto px-6 md:px-12">
           <div className="text-center mb-10">
             <h2 className="font-display font-bold text-2xl sm:text-3xl text-neutral-800">
               How CareBridge helps
@@ -107,36 +115,18 @@ export default function Landing({ onEnter }: LandingProps) {
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="max-w-4xl mx-auto px-4 sm:px-6 py-16 text-center">
-        <h2 className="font-display font-bold text-2xl sm:text-3xl text-neutral-800">
-          Ready to see it in action?
-        </h2>
-        <p className="text-neutral-500 mt-3 max-w-lg mx-auto">
-          Choose a role and explore the full demo. No sign-up needed — it's a prototype for a
-          college project review.
-        </p>
-        <button
-          onClick={onEnter}
-          className="mt-8 px-8 py-4 rounded-2xl bg-gradient-to-r from-primary-500 to-secondary-500 text-white font-bold text-lg shadow-lg hover:shadow-xl transition-all active:scale-95 flex items-center gap-2 mx-auto"
-        >
-          Choose Your Role
-          <ArrowRight className="w-5 h-5" />
-        </button>
-      </section>
-
       {/* Footer */}
       <footer className="border-t border-neutral-200 py-8 bg-neutral-50">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+        <div className="max-w-7xl mx-auto px-6 md:px-12">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center">
-              <Heart className="w-5 h-5 text-white" fill="currentColor" />
+            <div className="w-8 h-8 rounded-lg bg-primary text-primary-text flex items-center justify-center">
+              <Heart className="w-5 h-5" fill="currentColor" />
             </div>
             <span className="font-display font-bold text-lg text-neutral-700">CareBridge</span>
           </div>
           <Disclaimer />
           <p className="text-center text-xs text-neutral-400 mt-2">
-            Academic Final-Year Engineering Project · Prototype Demo · 2026
+            Care coordination for the people who matter most · 2026
           </p>
         </div>
       </footer>

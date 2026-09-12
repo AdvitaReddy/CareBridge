@@ -7,6 +7,7 @@ import { useApp } from '@/context/AppContext';
 import { formatDate } from '@/data/mockData';
 import DashboardHeader from '@/components/DashboardHeader';
 import Disclaimer from '@/components/Disclaimer';
+import BridgeyHero from '@/components/BridgeyHero';
 
 interface AdminDashboardProps {
   onBack: () => void;
@@ -45,7 +46,7 @@ export default function AdminDashboard({ onBack }: AdminDashboardProps) {
   ];
 
   return (
-    <div className="min-h-screen bg-neutral-50">
+    <div className="min-h-screen bg-primary-50 dark:bg-bg-dark">
       <DashboardHeader
         role="admin"
         title="Admin Panel"
@@ -53,7 +54,15 @@ export default function AdminDashboard({ onBack }: AdminDashboardProps) {
         onBack={onBack}
       />
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
+      <div className="lg:ml-64 max-w-7xl mx-auto px-6 md:px-12 pt-6">
+        <BridgeyHero
+          eyebrow="Platform pulse"
+          message={pendingCaregivers.length > 0 ? `${pendingCaregivers.length} caregiver${pendingCaregivers.length === 1 ? '' : 's'} waiting for verification.` : 'Everything is up to date on the platform.'}
+          expression={pendingCaregivers.length > 0 ? 'concerned' : 'happy'}
+        />
+      </div>
+
+      <div className="lg:ml-64 max-w-7xl mx-auto px-6 md:px-12 py-6">
         {/* Tabs */}
         <div className="flex gap-1 sm:gap-2 overflow-x-auto border-b border-neutral-200 mb-6">
           {tabs.map((tab) => (

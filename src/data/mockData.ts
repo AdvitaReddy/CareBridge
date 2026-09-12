@@ -425,6 +425,16 @@ export function formatTime(iso: string): string {
   });
 }
 
+export function formatClockTime(value: string): string {
+  const [hoursText, minutesText] = value.split(':');
+  const hours = Number(hoursText);
+  const minutes = Number(minutesText);
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return value;
+  const suffix = hours >= 12 ? 'PM' : 'AM';
+  const displayHour = hours % 12 || 12;
+  return `${displayHour}:${String(minutes).padStart(2, '0')} ${suffix}`;
+}
+
 export function formatDateTime(iso: string): string {
   return `${formatDate(iso)} · ${formatTime(iso)}`;
 }

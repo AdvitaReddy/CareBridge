@@ -1,5 +1,6 @@
 import { Pill, Check, Clock, AlertCircle } from 'lucide-react';
 import type { Medicine } from '@/data/mockData';
+import { formatClockTime } from '@/data/mockData';
 import StatusBadge from './StatusBadge';
 
 interface MedicineCardProps {
@@ -22,9 +23,9 @@ export default function MedicineCard({
 
   return (
     <div
-      className={`card p-4 ${large ? 'sm:p-5' : ''} ${
-        isTaken ? 'border-success-200 bg-success-50/50' : ''
-      } ${isMissed ? 'border-danger-200 bg-danger-50/50' : ''} transition-all`}
+      className={`card ${large ? 'sm:p-6' : ''} ${
+        isTaken ? 'bg-success-50' : ''
+      } ${isMissed ? 'bg-danger-50' : ''} transition-all`}
     >
       <div className="flex items-start gap-3">
         <div
@@ -63,7 +64,7 @@ export default function MedicineCard({
                 }`}
               >
                 <Clock className="w-3 h-3" />
-                {t}
+                {formatClockTime(t)}
               </span>
             ))}
             {medicine.notes && (
@@ -73,9 +74,9 @@ export default function MedicineCard({
         </div>
       </div>
       {onMarkTaken && !isTaken && (
-        <button
+          <button
           onClick={() => onMarkTaken(medicine.id)}
-          className={`mt-4 w-full ${large ? 'btn-elderly' : 'px-4 py-2.5 text-sm font-semibold rounded-xl'} bg-success-500 text-white hover:bg-success-600 transition-colors active:scale-95 flex items-center justify-center gap-2`}
+          className={`mt-4 w-full ${large ? 'btn-elderly' : 'px-4 py-2.5 text-sm font-semibold rounded-xl'} bg-success text-success-text hover:brightness-95 transition-colors active:scale-95 flex items-center justify-center gap-2`}
         >
           <Check className={large ? 'w-6 h-6' : 'w-4 h-4'} />
           {large ? 'Mark as Taken' : 'Mark Taken'}
