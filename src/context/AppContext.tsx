@@ -3,8 +3,11 @@ import {
   useContext,
   useState,
   useCallback,
+  useEffect,
   type ReactNode,
 } from 'react';
+import type { Session } from '@supabase/supabase-js';
+import { supabase } from '@/supabaseClient';
 import {
   type Medicine,
   type Appointment,
@@ -27,9 +30,11 @@ import {
 } from '@/data/mockData';
 
 interface AppContextValue {
-  // Role
+  profile: UserProfile | null;
+  authLoading: boolean;
+  signIn: (email: string, password: string) => Promise<void>;
+  signOut: () => Promise<void>;
   currentRole: Role | null;
-  setCurrentRole: (role: Role | null) => void;
   bridgeySection: string;
   setBridgeySection: (section: string) => void;
   bridgeyEvent: { type: 'medicine-taken' | 'medicines-complete' | 'appointment-added' | 'caregiver-added' | 'task-completed' | 'sos-triggered' | 'sos-resolved'; id: number } | null;
@@ -81,9 +86,25 @@ interface AppContextValue {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
-function getStoredRole(): Role | null {
-  const role = window.sessionStorage.getItem('carebridge-active-role');
-  return role === 'elderly' || role === 'family' || role === 'caregiver' || role === 'admin' ? role : null;
+export interface UserProfile {
+  id: string;
+  full_name: string;
+  role: Role;
+  care_circle_id: string | null;
+}
+
+async function loadProfile(userId: string): Promise<UserProfile> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, role, care_circle_id')
+    .eq('id', userId)
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'No CareBridge profile is linked to this account.');
+  }
+
+  return data as UserProfile;
 }
 
 let idCounter = 1000;
@@ -93,7 +114,9 @@ function genId(prefix: string): string {
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [currentRole, setCurrentRoleState] = useState<Role | null>(getStoredRole);
+  const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [bridgeySection, setBridgeySection] = useState('landing');
   const [bridgeyEvent, setBridgeyEvent] = useState<AppContextValue['bridgeyEvent']>(null);
   const [sosConfirmationOpen, setSosConfirmationOpen] = useState(false);
@@ -108,11 +131,86 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const activeSOS = sosEvents.find((s) => s.status === 'active') ?? null;
 
-  const setCurrentRole = useCallback((role: Role | null) => {
-    setCurrentRoleState(role);
-    if (role) window.sessionStorage.setItem('carebridge-active-role', role);
-    else window.sessionStorage.removeItem('carebridge-active-role');
+  useEffect(() => {
+    let active = true;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!active) return;
+      setSession(nextSession);
+      if (!nextSession) {
+        setProfile(null);
+        setAuthLoading(false);
+      } else {
+        setAuthLoading(true);
+      }
+    });
+
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!active) return;
+      setSession(error ? null : data.session);
+      if (error || !data.session) setAuthLoading(false);
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
+
+  useEffect(() => {
+    if (!session) {
+      setProfile(null);
+      setAuthLoading(false);
+      return;
+    }
+
+    let active = true;
+    loadProfile(session.user.id)
+      .then((nextProfile) => {
+        if (active) setProfile(nextProfile);
+      })
+      .catch(() => {
+        if (active) setProfile(null);
+      })
+      .finally(() => {
+        if (active) setAuthLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [session]);
+
+  const signIn = useCallback(async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    if (!data.user || !data.session) throw new Error('Supabase did not return an authenticated user.');
+
+    try {
+      const nextProfile = await loadProfile(data.user.id);
+      const { error: auditError } = await supabase.from('audit_log').insert({
+        actor: data.user.id,
+        action: 'login',
+        target: `profile:${data.user.id}`,
+        is_demo: email.trim().toLowerCase().endsWith('@demo.com'),
+      });
+      if (auditError) throw auditError;
+      setSession(data.session);
+      setProfile(nextProfile);
+      setAuthLoading(false);
+    } catch (error) {
+      await supabase.auth.signOut();
+      throw error;
+    }
+  }, []);
+
+  const signOut = useCallback(async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+    setSession(null);
+    setProfile(null);
+  }, []);
+
+  const currentRole = profile?.role ?? null;
 
   const addTimelineEntry = useCallback((entry: Omit<TimelineEntry, 'id'>) => {
     const newEntry: TimelineEntry = { ...entry, id: genId('t') };
@@ -325,8 +423,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value: AppContextValue = {
+    profile,
+    authLoading,
+    signIn,
+    signOut,
     currentRole,
-    setCurrentRole,
     bridgeySection,
     setBridgeySection,
     bridgeyEvent,

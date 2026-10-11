@@ -52,7 +52,7 @@ export default function Landing({ onEnter }: LandingProps) {
           onClick={onEnter}
           className="btn-secondary mt-8 px-8 py-4 text-base sm:text-lg flex items-center gap-2 mx-auto animate-slide-up"
         >
-          Enter App
+          Sign in
           <ArrowRight className="w-5 h-5" />
         </button>
       </section>

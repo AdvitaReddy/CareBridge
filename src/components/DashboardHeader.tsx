@@ -1,4 +1,4 @@
-import { ArrowLeft, Heart, LayoutDashboard, Users, Calendar, Pill, AlertTriangle, ShieldCheck, CheckSquare, BarChart3 } from 'lucide-react';
+import { LogOut, Heart, LayoutDashboard, Users, Calendar, Pill, AlertTriangle, ShieldCheck, CheckSquare, BarChart3 } from 'lucide-react';
 import type { Role } from '@/data/mockData';
 
 interface DashboardHeaderProps {
@@ -42,8 +42,8 @@ export default function DashboardHeader({ role, title, subtitle, onBack }: Dashb
             ))}
           </nav>
           <button onClick={onBack} className="mt-auto flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-text-muted-light hover:bg-tertiary hover:text-tertiary-text transition-colors">
-            <ArrowLeft className="w-5 h-5" />
-            Switch role
+            <LogOut className="w-5 h-5" />
+            Sign out
           </button>
         </aside>
       )}
@@ -54,9 +54,9 @@ export default function DashboardHeader({ role, title, subtitle, onBack }: Dashb
             <button
               onClick={onBack}
               className="p-2 rounded-xl bg-primary text-primary-text hover:brightness-95 transition-colors"
-              aria-label="Back to role selection"
+              aria-label="Sign out"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <LogOut className="w-5 h-5" />
             </button>
             <div>
               <h1 className="font-heading font-bold text-lg sm:text-xl">{title}</h1>
