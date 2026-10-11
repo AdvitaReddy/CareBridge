@@ -18,7 +18,6 @@ import {
   type CaregiverTask,
   type AdminUser,
   type Role,
-  seedMedicines,
   seedAppointments,
   seedSOSEvents,
   seedTimeline,
@@ -43,9 +42,18 @@ interface AppContextValue {
 
   // Medicines
   medicines: Medicine[];
-  markMedicineTaken: (id: string) => void;
-  simulateMissedDose: (id: string) => void;
-  addMedicine: (med: Omit<Medicine, 'id' | 'status'>) => void;
+  doses: CareDose[];
+  careLoading: boolean;
+  careError: string | null;
+  refreshCareData: () => Promise<void>;
+  confirmDose: (doseId: string) => Promise<void>;
+  addMedicine: (med: Pick<Medicine, 'name' | 'dosage' | 'times'>) => Promise<void>;
+  updateMedicine: (id: string, med: Pick<Medicine, 'name' | 'dosage' | 'times'>) => Promise<void>;
+  notifications: CareNotification[];
+  timelineEvents: CareTimelineEvent[];
+  addCareTimelineEvent: (type: string, message: string) => Promise<void>;
+  markNotificationRead: (notificationId: string) => Promise<void>;
+  runDemoAction: (action: 'demo_make_next_dose_due' | 'demo_force_dose_missed' | 'reset_demo_data') => Promise<void>;
 
   // Appointments
   appointments: Appointment[];
@@ -93,6 +101,35 @@ export interface UserProfile {
   care_circle_id: string | null;
 }
 
+export type DoseStatus = 'scheduled' | 'due' | 'taken' | 'missed' | 'taken_late';
+
+export interface CareDose {
+  id: string;
+  medicine_id: string;
+  scheduled_at: string;
+  status: DoseStatus;
+  confirmed_at: string | null;
+  medicine_name: string;
+  medicine_dosage: string;
+}
+
+export interface CareNotification {
+  id: string;
+  type: string;
+  message: string;
+  linked_id: string | null;
+  read: boolean;
+  created_at: string;
+}
+
+export interface CareTimelineEvent {
+  id: string;
+  type: string;
+  message: string;
+  linked_id: string | null;
+  created_at: string;
+}
+
 async function loadProfile(userId: string): Promise<UserProfile> {
   const { data, error } = await supabase
     .from('profiles')
@@ -120,7 +157,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [bridgeySection, setBridgeySection] = useState('landing');
   const [bridgeyEvent, setBridgeyEvent] = useState<AppContextValue['bridgeyEvent']>(null);
   const [sosConfirmationOpen, setSosConfirmationOpen] = useState(false);
-  const [medicines, setMedicines] = useState<Medicine[]>(seedMedicines);
+  const [medicines, setMedicines] = useState<Medicine[]>([]);
+  const [doses, setDoses] = useState<CareDose[]>([]);
+  const [notifications, setNotifications] = useState<CareNotification[]>([]);
+  const [timelineEvents, setTimelineEvents] = useState<CareTimelineEvent[]>([]);
+  const [careLoading, setCareLoading] = useState(false);
+  const [careError, setCareError] = useState<string | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>(seedAppointments);
   const [sosEvents, setSosEvents] = useState<SOSEvent[]>(seedSOSEvents);
   const [timeline, setTimeline] = useState<TimelineEntry[]>(seedTimeline);
@@ -211,68 +253,166 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const currentRole = profile?.role ?? null;
+  const refreshCareData = useCallback(async () => {
+    if (!profile?.care_circle_id) return;
+
+    const { error: generateError } = await supabase.rpc('generate_todays_doses');
+    if (generateError) throw generateError;
+    const { error: refreshError } = await supabase.rpc('refresh_dose_states');
+    if (refreshError) throw refreshError;
+
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+
+    const [medicineResult, doseResult, notificationResult, timelineResult] = await Promise.all([
+      supabase.from('medicines').select('id, name, dosage, times').order('created_at'),
+      supabase
+        .from('doses')
+        .select('id, medicine_id, scheduled_at, status, confirmed_at')
+        .gte('scheduled_at', start.toISOString())
+        .lt('scheduled_at', end.toISOString())
+        .order('scheduled_at'),
+      supabase.from('notifications').select('id, type, message, linked_id, read, created_at').order('created_at', { ascending: false }).limit(100),
+      supabase.from('timeline_events').select('id, type, message, linked_id, created_at').order('created_at', { ascending: false }).limit(100),
+    ]);
+
+    const queryError = medicineResult.error ?? doseResult.error ?? notificationResult.error ?? timelineResult.error;
+    if (queryError) throw queryError;
+
+    const medicineRows = medicineResult.data ?? [];
+    const medicineById = new Map(medicineRows.map((medicine) => [medicine.id, medicine]));
+    const doseRows = (doseResult.data ?? []).map((dose) => {
+      const medicine = medicineById.get(dose.medicine_id);
+      return {
+        ...dose,
+        status: dose.status as DoseStatus,
+        medicine_name: medicine?.name ?? 'Medicine',
+        medicine_dosage: medicine?.dosage ?? '',
+      };
+    });
+    const dosesByMedicine = new Map<string, CareDose[]>();
+    for (const dose of doseRows) {
+      const medicineDoses = dosesByMedicine.get(dose.medicine_id) ?? [];
+      medicineDoses.push(dose);
+      dosesByMedicine.set(dose.medicine_id, medicineDoses);
+    }
+
+    setDoses(doseRows);
+    setMedicines(medicineRows.map((medicine) => {
+      const medicineDoses = dosesByMedicine.get(medicine.id) ?? [];
+      const status = medicineDoses.length > 0 && medicineDoses.every((dose) => dose.status === 'taken' || dose.status === 'taken_late')
+        ? 'taken'
+        : medicineDoses.some((dose) => dose.status === 'missed')
+          ? 'missed'
+          : 'pending';
+      return {
+        ...medicine,
+        frequency: medicine.times.length === 1 ? 'Once daily' : `${medicine.times.length} times daily`,
+        times: medicine.times,
+        status,
+      };
+    }));
+    setNotifications((notificationResult.data ?? []) as CareNotification[]);
+    setTimelineEvents((timelineResult.data ?? []) as CareTimelineEvent[]);
+    setCareError(null);
+  }, [profile?.care_circle_id]);
+
+  useEffect(() => {
+    if (!profile?.care_circle_id) {
+      setMedicines([]);
+      setDoses([]);
+      setNotifications([]);
+      setTimelineEvents([]);
+      setCareError(null);
+      return;
+    }
+
+    let active = true;
+    const load = async () => {
+      setCareLoading(true);
+      try {
+        await refreshCareData();
+      } catch (error) {
+        if (active) setCareError(error instanceof Error ? error.message : 'Unable to load care data.');
+      } finally {
+        if (active) setCareLoading(false);
+      }
+    };
+    void load();
+    const intervalId = window.setInterval(() => void load(), 15_000);
+    const channel = supabase
+      .channel(`care-data-${profile.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'doses' }, () => void load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'medicines' }, () => void load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => void load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'timeline_events' }, () => void load())
+      .subscribe();
+
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+      void supabase.removeChannel(channel);
+    };
+  }, [profile?.care_circle_id, profile?.id, refreshCareData]);
+
+  const confirmDose = useCallback(async (doseId: string) => {
+    const { error } = await supabase.rpc('confirm_dose', { dose_id: doseId });
+    if (error) throw error;
+    await refreshCareData();
+  }, [refreshCareData]);
+
+  const addMedicine = useCallback(async (medicine: Pick<Medicine, 'name' | 'dosage' | 'times'>) => {
+    if (!profile?.care_circle_id) throw new Error('No care circle is linked to this account.');
+    const { error } = await supabase.from('medicines').insert({
+      care_circle_id: profile.care_circle_id,
+      name: medicine.name,
+      dosage: medicine.dosage,
+      times: medicine.times,
+      created_by: profile.id,
+    });
+    if (error) throw error;
+    await refreshCareData();
+  }, [profile?.care_circle_id, profile?.id, refreshCareData]);
+
+  const updateMedicine = useCallback(async (id: string, medicine: Pick<Medicine, 'name' | 'dosage' | 'times'>) => {
+    const { error } = await supabase.from('medicines').update({
+      name: medicine.name,
+      dosage: medicine.dosage,
+      times: medicine.times,
+    }).eq('id', id);
+    if (error) throw error;
+    await refreshCareData();
+  }, [refreshCareData]);
+
+  const markNotificationRead = useCallback(async (notificationId: string) => {
+    const { error } = await supabase.from('notifications').update({ read: true }).eq('id', notificationId);
+    if (error) throw error;
+    setNotifications((previous) => previous.map((item) => item.id === notificationId ? { ...item, read: true } : item));
+  }, []);
+
+  const addCareTimelineEvent = useCallback(async (type: string, message: string) => {
+    if (!profile?.care_circle_id) throw new Error('No care circle is linked to this account.');
+    const { error } = await supabase.from('timeline_events').insert({
+      care_circle_id: profile.care_circle_id,
+      type,
+      message,
+    });
+    if (error) throw error;
+    await refreshCareData();
+  }, [profile?.care_circle_id, refreshCareData]);
+
+  const runDemoAction = useCallback(async (action: 'demo_make_next_dose_due' | 'demo_force_dose_missed' | 'reset_demo_data') => {
+    const { error } = await supabase.rpc(action);
+    if (error) throw error;
+    await refreshCareData();
+  }, [refreshCareData]);
 
   const addTimelineEntry = useCallback((entry: Omit<TimelineEntry, 'id'>) => {
     const newEntry: TimelineEntry = { ...entry, id: genId('t') };
     setTimeline((prev) => [newEntry, ...prev]);
   }, []);
-
-  const markMedicineTaken = useCallback(
-    (id: string) => {
-      setMedicines((prev) =>
-        prev.map((m) => (m.id === id ? { ...m, status: 'taken' as const } : m))
-      );
-      const med = medicines.find((m) => m.id === id);
-      if (med) {
-        const allMedicinesTaken = medicines.length > 0 && medicines.every((medicine) =>
-          medicine.id === id || medicine.status === 'taken'
-        );
-        setBridgeyEvent({ type: allMedicinesTaken ? 'medicines-complete' : 'medicine-taken', id: Date.now() });
-        addTimelineEntry({
-          type: 'medicine',
-          title: `${med.name} ${med.dosage} taken`,
-          description: `Dose taken at ${new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true })}.`,
-          timestamp: new Date().toISOString(),
-          status: 'taken',
-        });
-      }
-    },
-    [medicines, addTimelineEntry]
-  );
-
-  const simulateMissedDose = useCallback(
-    (id: string) => {
-      setMedicines((prev) =>
-        prev.map((m) => (m.id === id ? { ...m, status: 'missed' as const } : m))
-      );
-      const med = medicines.find((m) => m.id === id);
-      if (med) {
-        addTimelineEntry({
-          type: 'medicine',
-          title: `${med.name} ${med.dosage} missed`,
-          description: `Scheduled dose was not taken on time.`,
-          timestamp: new Date().toISOString(),
-          status: 'missed',
-        });
-      }
-    },
-    [medicines, addTimelineEntry]
-  );
-
-  const addMedicine = useCallback(
-    (med: Omit<Medicine, 'id' | 'status'>) => {
-      const newMed: Medicine = { ...med, id: genId('m'), status: 'pending' };
-      setMedicines((prev) => [...prev, newMed]);
-      addTimelineEntry({
-        type: 'medicine',
-        title: `New medicine added: ${med.name} ${med.dosage}`,
-        description: `${med.frequency} at ${med.times.map(formatClockTime).join(', ')}`,
-        timestamp: new Date().toISOString(),
-        status: 'pending',
-      });
-    },
-    [addTimelineEntry]
-  );
 
   const addAppointment = useCallback(
     (appt: Omit<Appointment, 'id'>) => {
@@ -434,9 +574,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     sosConfirmationOpen,
     setSosConfirmationOpen,
     medicines,
-    markMedicineTaken,
-    simulateMissedDose,
+    doses,
+    careLoading,
+    careError,
+    refreshCareData,
+    confirmDose,
     addMedicine,
+    updateMedicine,
+    notifications,
+    timelineEvents,
+    addCareTimelineEvent,
+    markNotificationRead,
+    runDemoAction,
     appointments,
     addAppointment,
     addAppointmentSummary,
