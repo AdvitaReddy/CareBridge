@@ -1,52 +1,83 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AppProvider, useApp } from '@/context/AppContext';
-import type { Role } from '@/data/mockData';
 import Landing from '@/pages/Landing';
-import RoleSelection from '@/pages/RoleSelection';
+import Login from '@/pages/Login';
 import ElderlyDashboard from '@/pages/ElderlyDashboard';
 import FamilyDashboard from '@/pages/FamilyDashboard';
 import CaregiverDashboard from '@/pages/CaregiverDashboard';
 import AdminDashboard from '@/pages/AdminDashboard';
 import BridgeyCelebration from '@/components/BridgeyCelebration';
 
-type Screen = 'landing' | 'role-select' | 'dashboard';
-
 function AppContent() {
-  const { currentRole, setCurrentRole, setBridgeySection } = useApp();
-  const [screen, setScreen] = useState<Screen>(() => (currentRole ? 'dashboard' : 'landing'));
+  const { profile, authLoading, signOut, setBridgeySection } = useApp();
+  const [pathname, setPathname] = useState(window.location.pathname);
 
-  const handleEnter = () => {
-    setBridgeySection('role-select');
-    setScreen('role-select');
-  };
-  const handleBackToLanding = () => {
-    setBridgeySection('landing');
-    setScreen('landing');
-    setCurrentRole(null);
-  };
-  const handleBackToRoles = () => {
-    setScreen('role-select');
-    setCurrentRole(null);
-  };
-  const handleSelectRole = (role: Role) => {
-    setBridgeySection(role);
-    setCurrentRole(role);
-    setScreen('dashboard');
+  const navigate = (path: string) => {
+    if (window.location.pathname !== path) window.history.pushState({}, '', path);
+    setPathname(path);
   };
 
-  let page;
-  if (screen === 'landing') {
-    page = <Landing onEnter={handleEnter} />;
-  } else if (screen === 'role-select') {
-    page = <RoleSelection onSelect={handleSelectRole} onBack={handleBackToLanding} />;
-  } else {
-    switch (currentRole) {
-      case 'elderly': page = <ElderlyDashboard onBack={handleBackToRoles} />; break;
-      case 'family': page = <FamilyDashboard onBack={handleBackToRoles} />; break;
-      case 'caregiver': page = <CaregiverDashboard onBack={handleBackToRoles} />; break;
-      case 'admin': page = <AdminDashboard onBack={handleBackToRoles} />; break;
-      default: page = <RoleSelection onSelect={handleSelectRole} onBack={handleBackToLanding} />;
+  useEffect(() => {
+    const handlePopState = () => setPathname(window.location.pathname);
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
+    if (authLoading) return;
+    const dashboardMatch = pathname.match(/^\/dashboard\/([^/]+)\/?$/);
+
+    if (dashboardMatch) {
+      if (!profile) navigate('/login');
+      else if (dashboardMatch[1] !== profile.role) navigate(`/dashboard/${profile.role}`);
+      else setBridgeySection(profile.role);
+      return;
     }
+
+    if (pathname === '/login') {
+      if (profile) navigate(`/dashboard/${profile.role}`);
+      return;
+    }
+
+    if (pathname === '/') {
+      if (profile) navigate(`/dashboard/${profile.role}`);
+      return;
+    }
+
+    navigate(profile ? `/dashboard/${profile.role}` : '/login');
+  }, [authLoading, pathname, profile, setBridgeySection]);
+
+  if (authLoading) {
+    return <main className="min-h-screen grid place-items-center bg-primary-50 text-neutral-600">Loading CareBridge...</main>;
+  }
+
+  const dashboardMatch = pathname.match(/^\/dashboard\/([^/]+)\/?$/);
+  const canShowDashboard = dashboardMatch && profile && dashboardMatch[1] === profile.role;
+  let page;
+
+  if (pathname === '/' && !profile) {
+    page = <Landing onEnter={() => navigate('/login')} />;
+  } else if (pathname === '/login' && !profile) {
+    page = <Login onBack={() => navigate('/')} />;
+  } else if (canShowDashboard) {
+    const handleLogout = async () => {
+      try {
+        await signOut();
+        setBridgeySection('landing');
+        navigate('/login');
+      } catch (error) {
+        console.error('Unable to sign out:', error);
+      }
+    };
+
+    switch (profile.role) {
+      case 'elderly': page = <ElderlyDashboard onBack={handleLogout} />; break;
+      case 'family': page = <FamilyDashboard onBack={handleLogout} />; break;
+      case 'caregiver': page = <CaregiverDashboard onBack={handleLogout} />; break;
+      case 'admin': page = <AdminDashboard onBack={handleLogout} />; break;
+    }
+  } else {
+    page = null;
   }
 
   return (
