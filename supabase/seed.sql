@@ -5,20 +5,27 @@ declare
   admin_id uuid;
   account_count integer;
 begin
-  select count(*) into account_count
+  select count(*)
+  into account_count
   from auth.users
   where email in (
-    'elderly@demo.com', 'family@demo.com',
-    'caregiver@demo.com', 'admin@demo.com'
+    'elderly@demo.com',
+    'family@demo.com',
+    'caregiver@demo.com',
+    'admin@demo.com'
   );
 
   if account_count <> 4 then
-    raise exception 'Expected all four Auth users: elderly@demo.com, family@demo.com, caregiver@demo.com, admin@demo.com. Found %.', account_count;
+    raise exception
+      'Expected all four Auth users: elderly@demo.com, family@demo.com, caregiver@demo.com, admin@demo.com. Found %.',
+      account_count;
   end if;
 
-  select id into circle_id
+  select id
+  into circle_id
   from public.care_circles
   where name = 'Rao Family'
+  order by id
   limit 1;
 
   if circle_id is null then
@@ -36,33 +43,42 @@ begin
       when 'caregiver@demo.com' then 'Meera Nair'
       when 'admin@demo.com' then 'CareBridge Demo Admin'
     end,
-    case
-      when users.email = 'elderly@demo.com' then 'elderly'
-      when users.email = 'family@demo.com' then 'family'
-      when users.email = 'caregiver@demo.com' then 'caregiver'
-      else 'admin'
+    case users.email
+      when 'elderly@demo.com' then 'elderly'
+      when 'family@demo.com' then 'family'
+      when 'caregiver@demo.com' then 'caregiver'
+      when 'admin@demo.com' then 'admin'
     end,
     circle_id
   from auth.users as users
   where users.email in (
-    'elderly@demo.com', 'family@demo.com',
-    'caregiver@demo.com', 'admin@demo.com'
+    'elderly@demo.com',
+    'family@demo.com',
+    'caregiver@demo.com',
+    'admin@demo.com'
   )
   on conflict (id) do update
   set full_name = excluded.full_name,
       role = excluded.role,
       care_circle_id = excluded.care_circle_id;
 
-  select id into admin_id
+  select id
+  into admin_id
   from auth.users
   where email = 'admin@demo.com';
 
   insert into public.audit_log (actor, action, target, is_demo)
-  select admin_id, 'demo_seed', 'demo:profile:' || users.email, true
+  select
+    admin_id,
+    'demo_seed',
+    'demo:profile:' || users.email,
+    true
   from auth.users as users
   where users.email in (
-    'elderly@demo.com', 'family@demo.com',
-    'caregiver@demo.com', 'admin@demo.com'
+    'elderly@demo.com',
+    'family@demo.com',
+    'caregiver@demo.com',
+    'admin@demo.com'
   )
   and not exists (
     select 1
