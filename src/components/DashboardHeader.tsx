@@ -1,5 +1,6 @@
 import { LogOut, Heart, LayoutDashboard, Users, Calendar, Pill, AlertTriangle, ShieldCheck, CheckSquare, BarChart3 } from 'lucide-react';
 import type { Role } from '@/data/mockData';
+import NotificationCenter from '@/components/NotificationCenter';
 
 interface DashboardHeaderProps {
   role: Role;
@@ -64,6 +65,7 @@ export default function DashboardHeader({ role, title, subtitle, onBack }: Dashb
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <NotificationCenter />
             <Heart className="w-6 h-6 text-secondary" fill="currentColor" />
             <span className="font-heading font-bold text-base hidden sm:block">CareBridge</span>
           </div>

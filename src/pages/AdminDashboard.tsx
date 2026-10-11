@@ -8,6 +8,7 @@ import { formatDate } from '@/data/mockData';
 import DashboardHeader from '@/components/DashboardHeader';
 import Disclaimer from '@/components/Disclaimer';
 import BridgeyHero from '@/components/BridgeyHero';
+import SharedTimeline from '@/components/SharedTimeline';
 
 interface AdminDashboardProps {
   onBack: () => void;
@@ -20,8 +21,24 @@ export default function AdminDashboard({ onBack }: AdminDashboardProps) {
     adminUsers, approveUser, rejectUser,
     caregivers, approveCaregiver, rejectCaregiver,
     medicines, appointments, sosEvents, careCircle,
+    runDemoAction, timelineEvents,
   } = useApp();
   const [activeTab, setActiveTab] = useState<Tab>('stats');
+  const [demoAction, setDemoAction] = useState<string | null>(null);
+  const [demoError, setDemoError] = useState<string | null>(null);
+
+  const handleDemoAction = async (action: 'demo_make_next_dose_due' | 'demo_force_dose_missed' | 'reset_demo_data') => {
+    if (action === 'reset_demo_data' && !window.confirm('Reset today’s demo doses and their generated events?')) return;
+    setDemoAction(action);
+    setDemoError(null);
+    try {
+      await runDemoAction(action);
+    } catch (error) {
+      setDemoError(error instanceof Error ? error.message : 'Unable to run the demo action.');
+    } finally {
+      setDemoAction(null);
+    }
+  };
 
   const pendingCaregivers = caregivers.filter((c) => !c.verified);
   const activeUsers = adminUsers.filter((u) => u.status === 'active');
@@ -120,6 +137,38 @@ export default function AdminDashboard({ onBack }: AdminDashboardProps) {
                 </div>
               </div>
             </div>
+
+            <section className="card p-5" aria-labelledby="demo-tools-title">
+              <h3 id="demo-tools-title" className="font-display font-bold text-base text-neutral-800 mb-4">Demo tools</h3>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  disabled={demoAction !== null}
+                  onClick={() => void handleDemoAction('demo_make_next_dose_due')}
+                  className="btn-primary disabled:opacity-50"
+                >
+                  Make next dose due now
+                </button>
+                <button
+                  type="button"
+                  disabled={demoAction !== null}
+                  onClick={() => void handleDemoAction('demo_force_dose_missed')}
+                  className="px-4 py-2.5 rounded-xl bg-warning-500 text-white font-semibold text-sm hover:bg-warning-600 disabled:opacity-50"
+                >
+                  Force dose to missed
+                </button>
+                <button
+                  type="button"
+                  disabled={demoAction !== null}
+                  onClick={() => void handleDemoAction('reset_demo_data')}
+                  className="px-4 py-2.5 rounded-xl border border-neutral-300 text-neutral-700 font-semibold text-sm hover:bg-neutral-50 disabled:opacity-50"
+                >
+                  Reset demo data
+                </button>
+              </div>
+              {demoAction && <p className="text-xs text-neutral-500 mt-3">Running demo action…</p>}
+              {demoError && <p role="alert" className="text-sm text-danger-600 mt-3">{demoError}</p>}
+            </section>
           </div>
         )}
 
@@ -257,6 +306,9 @@ export default function AdminDashboard({ onBack }: AdminDashboardProps) {
             </div>
           </div>
         )}
+        <div className="mt-8">
+          <SharedTimeline events={timelineEvents} />
+        </div>
       </div>
 
       <footer className="py-6">

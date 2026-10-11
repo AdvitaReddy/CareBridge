@@ -9,6 +9,7 @@ import DashboardHeader from '@/components/DashboardHeader';
 import SOSBanner from '@/components/SOSBanner';
 import Disclaimer from '@/components/Disclaimer';
 import BridgeyHero from '@/components/BridgeyHero';
+import SharedTimeline from '@/components/SharedTimeline';
 
 interface CaregiverDashboardProps {
   onBack: () => void;
@@ -17,7 +18,7 @@ interface CaregiverDashboardProps {
 type Tab = 'tasks' | 'schedule' | 'alerts';
 
 export default function CaregiverDashboard({ onBack }: CaregiverDashboardProps) {
-  const { caregiverTasks, toggleTask, appointments, activeSOS, sosEvents, medicines } = useApp();
+  const { caregiverTasks, toggleTask, appointments, activeSOS, sosEvents, medicines, timelineEvents } = useApp();
   const [activeTab, setActiveTab] = useState<Tab>('tasks');
 
   const upcomingAppts = appointments.filter(
@@ -263,6 +264,10 @@ export default function CaregiverDashboard({ onBack }: CaregiverDashboardProps) 
             </div>
           </div>
         )}
+      </div>
+
+      <div className="lg:ml-64 max-w-7xl mx-auto px-6 md:px-12 pb-6">
+        <SharedTimeline events={timelineEvents} />
       </div>
 
       <footer className="py-6">

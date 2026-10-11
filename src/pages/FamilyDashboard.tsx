@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react';
 import {
   Clock, Calendar, Pill, AlertTriangle, Users, Heart, Plus, Search,
-  Star, MapPin, CheckCircle2, UserPlus, Activity, FileText,
+  Star, MapPin, CheckCircle2, UserPlus, FileText, Pencil, Activity,
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
-import { familyMember, elderlyPerson, formatDateTime } from '@/data/mockData';
+import { familyMember, elderlyPerson, formatClockTime, formatDateTime } from '@/data/mockData';
 import DashboardHeader from '@/components/DashboardHeader';
 import SOSBanner from '@/components/SOSBanner';
-import MedicineCard from '@/components/MedicineCard';
 import AppointmentCard from '@/components/AppointmentCard';
-import TimelineEntry from '@/components/TimelineEntry';
+import SharedTimeline from '@/components/SharedTimeline';
 import Disclaimer from '@/components/Disclaimer';
 import AddMedicineModal from '@/components/AddMedicineModal';
 import AddAppointmentModal from '@/components/AddAppointmentModal';
@@ -25,9 +24,9 @@ interface FamilyDashboardProps {
 
 export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
   const {
-    timeline, medicines, appointments, sosEvents, caregivers, careCircle,
-    markMedicineTaken, simulateMissedDose, requestCaregiver,
-    activeSOS, addTimelineEntry, setBridgeySection,
+    medicines, doses, appointments, sosEvents, caregivers, careCircle,
+    requestCaregiver, activeSOS, setBridgeySection,
+    profile, timelineEvents, careLoading, careError, addCareTimelineEvent,
   } = useApp();
   const familyMemberName = familyMember.name;
   const elderlyName = elderlyPerson.name;
@@ -35,13 +34,16 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
 
     const [activeTab, setActiveTab] = useState<Tab>('timeline');
   const [showAddMed, setShowAddMed] = useState(false);
+  const [editingMedicineId, setEditingMedicineId] = useState<string | null>(null);
   const [showAddAppt, setShowAddAppt] = useState(false);
   const [showSummary, setShowSummary] = useState<string | null>(null);
   const [showInvite, setShowInvite] = useState(false);
   const [caregiverSearch, setCaregiverSearch] = useState('');
   const [healthNote, setHealthNote] = useState('');
 
-  const missedMeds = medicines.filter((m) => m.status === 'missed');
+  const missedDoses = doses.filter((dose) => dose.status === 'missed');
+  const completedDoses = doses.filter((dose) => dose.status === 'taken' || dose.status === 'taken_late');
+  const pendingDoses = doses.filter((dose) => dose.status === 'scheduled' || dose.status === 'due');
   const upcomingAppts = appointments.filter(
     (a) => new Date(a.date + 'T00:00:00') >= new Date('2026-09-12T00:00:00')
   );
@@ -52,8 +54,8 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
   );
   const familyHeroMessage = activeSOS
     ? 'An SOS needs attention right now. Your care circle has been alerted.'
-    : missedMeds.length > 0
-      ? `Heads up — ${missedMeds.length} dose${missedMeds.length === 1 ? '' : 's'} was missed this morning.`
+    : missedDoses.length > 0
+      ? `Heads up — ${missedDoses.length} dose${missedDoses.length === 1 ? '' : 's'} was missed today.`
       : `Everything looks good with ${elderlyName} today.`;
 
   const tabs: { id: Tab; label: string; icon: typeof Clock }[] = [
@@ -74,22 +76,21 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
     }
   }, [activeTab, medicines.length, upcomingAppts.length, setBridgeySection]);
 
-  const handleAddNote = () => {
+  const handleAddNote = async () => {
     if (!healthNote.trim()) return;
-    addTimelineEntry({
-      type: 'note',
-      title: 'Health note added',
-      description: healthNote.trim(),
-      timestamp: new Date().toISOString(),
-    });
-    setHealthNote('');
+    try {
+      await addCareTimelineEvent('note', healthNote.trim());
+      setHealthNote('');
+    } catch (error) {
+      console.error('Unable to add health note:', error);
+    }
   };
 
   return (
     <div className="min-h-screen bg-primary-50 dark:bg-bg-dark">
       <DashboardHeader
         role="family"
-        title={`${familyMemberName} · Family Dashboard`}
+        title={`${profile?.full_name ?? familyMemberName} · Family Dashboard`}
         subtitle={`Monitoring ${elderlyName} in ${elderlyLocation}`}
         onBack={onBack}
       />
@@ -98,7 +99,7 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
         <BridgeyHero
           eyebrow="Care circle update"
           message={familyHeroMessage}
-          expression={activeSOS || missedMeds.length > 0 ? 'concerned' : 'happy'}
+          expression={activeSOS || missedDoses.length > 0 ? 'concerned' : 'happy'}
         />
       </div>
 
@@ -111,15 +112,15 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
         )}
 
         {/* Missed Medicine Alert */}
-        {missedMeds.length > 0 && (
+        {missedDoses.length > 0 && (
           <div className="mb-6 bg-warning-100 border border-warning-300 rounded-2xl p-4 flex items-start gap-3 animate-slide-in-right">
             <AlertTriangle className="w-6 h-6 text-warning-600 flex-shrink-0 mt-0.5" />
             <div>
               <p className="font-display font-bold text-warning-800">
-                {missedMeds.length} missed dose{missedMeds.length > 1 ? 's' : ''} today
+                {missedDoses.length} missed dose{missedDoses.length > 1 ? 's' : ''} today
               </p>
               <p className="text-sm text-warning-700 mt-0.5">
-                {missedMeds.map((m) => m.name).join(', ')} — please follow up with {elderlyName}.
+                {missedDoses.map((dose) => dose.medicine_name).join(', ')} — please follow up with {elderlyName}.
               </p>
             </div>
           </div>
@@ -193,9 +194,7 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
                 Shared Health Timeline
               </h3>
               <div>
-                {timeline.map((entry) => (
-                  <TimelineEntry key={entry.id} entry={entry} />
-                ))}
+                <p className="text-sm text-neutral-500">The latest care activity is shown below.</p>
               </div>
             </div>
           </div>
@@ -207,24 +206,60 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
             <div className="flex items-center justify-between">
               <h3 className="font-display font-bold text-lg text-neutral-800">Medicine Schedule</h3>
               <button
-                onClick={() => setShowAddMed(true)}
+                onClick={() => {
+                  setEditingMedicineId(null);
+                  setShowAddMed(true);
+                }}
                 className="btn-primary inline-flex items-center gap-1.5 text-sm"
               >
                 <Plus className="w-4 h-4" />
                 Add Medicine
               </button>
             </div>
-            <div className="space-y-3">
-              {medicines.map((med) => (
-                <MedicineCard
-                  key={med.id}
-                  medicine={med}
-                  onMarkTaken={markMedicineTaken}
-                  onSimulateMissed={simulateMissedDose}
-                  showSimulate
-                />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[
+                { label: 'Completed', value: completedDoses.length, color: 'success' },
+                { label: 'Pending', value: pendingDoses.length, color: 'primary' },
+                { label: 'Missed', value: missedDoses.length, color: 'danger' },
+              ].map((item) => (
+                <div key={item.label} className="card p-4">
+                  <p className={`font-display font-bold text-2xl text-${item.color}-600`}>{item.value}</p>
+                  <p className="text-xs text-neutral-500">Today's {item.label.toLowerCase()} doses</p>
+                </div>
               ))}
             </div>
+            {careError && <p role="alert" className="text-sm text-danger-600">{careError}</p>}
+            {careLoading && medicines.length === 0 ? (
+              <p className="text-sm text-neutral-500">Loading medicines…</p>
+            ) : medicines.length === 0 ? (
+              <div className="card p-6 text-center text-sm text-neutral-400">No medicines have been added.</div>
+            ) : (
+              <div className="space-y-3">
+                {medicines.map((med) => (
+                  <div key={med.id} className="card p-4 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary-100 text-primary-600 flex items-center justify-center">
+                      <Pill className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-sm text-neutral-800">{med.name} · {med.dosage}</p>
+                      <p className="text-xs text-neutral-500 mt-1">{med.times.map(formatClockTime).join(', ')}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingMedicineId(med.id);
+                        setShowAddMed(true);
+                      }}
+                      className="p-2 rounded-lg text-neutral-500 hover:bg-neutral-100"
+                      aria-label={`Edit ${med.name}`}
+                      title="Edit medicine"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -415,6 +450,9 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
             )}
           </div>
         )}
+        <div className="mt-8">
+          <SharedTimeline events={timelineEvents} />
+        </div>
       </div>
 
       <footer className="py-6">
@@ -422,7 +460,12 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
       </footer>
 
       {/* Modals */}
-      {showAddMed && <AddMedicineModal onClose={() => setShowAddMed(false)} />}
+      {showAddMed && (
+        <AddMedicineModal
+          medicine={medicines.find((medicine) => medicine.id === editingMedicineId)}
+          onClose={() => setShowAddMed(false)}
+        />
+      )}
       {showAddAppt && <AddAppointmentModal onClose={() => setShowAddAppt(false)} />}
       {showSummary && (
         <SummaryModal
