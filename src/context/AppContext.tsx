@@ -23,7 +23,6 @@ import {
   seedAppointments,
   seedTimeline,
   seedCaregivers,
-  seedCareCircle,
   seedCaregiverTasks,
   seedAdminUsers,
   formatClockTime,
@@ -31,8 +30,10 @@ import {
 
 interface AppContextValue {
   profile: UserProfile | null;
+  userEmail: string | null;
   authLoading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, fullName: string) => Promise<boolean>;
   signOut: () => Promise<void>;
   currentRole: Role | null;
   bridgeySection: string;
@@ -79,7 +80,14 @@ interface AppContextValue {
 
   // Care Circle
   careCircle: CareCircleMember[];
-  inviteFamilyMember: (name: string, email: string, role: string, location: string) => void;
+  circleInvitations: CircleInvitation[];
+  emergencyContact: EmergencyContact;
+  refreshCareCircleData: () => Promise<void>;
+  inviteCircleMember: (email: string, role: 'family' | 'caregiver') => Promise<void>;
+  cancelCircleInvitation: (id: string) => Promise<void>;
+  respondToCircleInvitation: (id: string, accept: boolean) => Promise<void>;
+  removeCircleMember: (id: string) => Promise<void>;
+  updateEmergencyContact: (name: string, phone: string) => Promise<void>;
 
   // Caregiver Tasks
   caregiverTasks: CaregiverTask[];
@@ -135,6 +143,20 @@ export interface CareTimelineEvent {
   created_at: string;
 }
 
+export interface CircleInvitation {
+  id: string;
+  care_circle_id: string;
+  email: string;
+  role: 'family' | 'caregiver';
+  status: 'pending' | 'accepted' | 'declined' | 'cancelled';
+  created_at: string;
+}
+
+export interface EmergencyContact {
+  name: string;
+  phone: string;
+}
+
 async function loadProfile(userId: string): Promise<UserProfile> {
   const { data, error } = await supabase
     .from('profiles')
@@ -168,6 +190,7 @@ function resolvedAfterLastVisible(resolvedAt: string | undefined, lastVisibleAt:
 export function AppProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [bridgeySection, setBridgeySection] = useState('landing');
   const [bridgeyEvent, setBridgeyEvent] = useState<AppContextValue['bridgeyEvent']>(null);
@@ -182,7 +205,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [sosEvents, setSosEvents] = useState<SOSEvent[]>([]);
   const [timeline, setTimeline] = useState<TimelineEntry[]>(seedTimeline);
   const [caregivers, setCaregivers] = useState<Caregiver[]>(seedCaregivers);
-  const [careCircle, setCareCircle] = useState<CareCircleMember[]>(seedCareCircle);
+  const [careCircle, setCareCircle] = useState<CareCircleMember[]>([]);
+  const [circleInvitations, setCircleInvitations] = useState<CircleInvitation[]>([]);
+  const [emergencyContact, setEmergencyContact] = useState<EmergencyContact>({ name: '', phone: '' });
   const [caregiverTasks, setCaregiverTasks] = useState<CaregiverTask[]>(seedCaregiverTasks);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>(seedAdminUsers);
   const sessionUserId = useRef<string | null>(null);
@@ -232,8 +257,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       sessionUserId.current = nextUserId;
       sosHydratedUserId.current = null;
       setSession(nextSession);
+      setUserEmail(nextSession?.user.email ?? null);
       if (!nextSession) {
         setProfile(null);
+        setUserEmail(null);
         setBridgeyEvent(null);
         activeBridgeyEventKey.current = null;
         setAuthLoading(false);
@@ -250,6 +277,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         sessionUserId.current = nextUserId;
         sosHydratedUserId.current = null;
         setSession(nextSession);
+        setUserEmail(nextSession?.user.email ?? null);
         if (!nextSession) setAuthLoading(false);
         else setAuthLoading(true);
       } else if (!nextSession) {
@@ -304,12 +332,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
       sessionUserId.current = data.user.id;
       sosHydratedUserId.current = null;
       setSession(data.session);
+      setUserEmail(data.user.email ?? email.trim().toLowerCase());
       setProfile(nextProfile);
       setAuthLoading(false);
     } catch (error) {
       await supabase.auth.signOut();
       throw error;
     }
+  }, []);
+
+  const signUp = useCallback(async (email: string, password: string, fullName: string) => {
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim().toLowerCase(),
+      password,
+      options: { data: { full_name: fullName.trim() } },
+    });
+    if (error) throw error;
+    if (!data.user) throw new Error('Supabase did not return a user account.');
+
+    if (data.session) {
+      const nextProfile = await loadProfile(data.user.id);
+      sessionUserId.current = data.user.id;
+      sosHydratedUserId.current = null;
+      setSession(data.session);
+      setUserEmail(data.user.email ?? email.trim().toLowerCase());
+      setProfile(nextProfile);
+      setAuthLoading(false);
+    }
+    return !data.session;
   }, []);
 
   const signOut = useCallback(async () => {
@@ -319,6 +369,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     sosHydratedUserId.current = null;
     activeBridgeyEventKey.current = null;
     setSession(null);
+    setUserEmail(null);
     setProfile(null);
     setBridgeyEvent(null);
   }, []);
@@ -464,6 +515,93 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSosEvents(nextEvents);
   }, [markSOSResolvedSeen, profile?.id]);
 
+  const refreshCareCircleData = useCallback(async () => {
+    if (!profile) {
+      setCareCircle([]);
+      setCircleInvitations([]);
+      setEmergencyContact({ name: '', phone: '' });
+      return;
+    }
+
+    const [memberResult, invitationResult, circleResult] = await Promise.all([
+      profile.care_circle_id
+        ? supabase.from('profiles')
+          .select('id, full_name, role')
+          .eq('care_circle_id', profile.care_circle_id)
+          .order('full_name')
+        : Promise.resolve({ data: [], error: null }),
+      supabase.from('invitations')
+        .select('id, care_circle_id, email, role, status, created_at')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false }),
+      profile.care_circle_id
+        ? supabase.from('care_circles')
+          .select('emergency_contact_name, emergency_contact_phone')
+          .eq('id', profile.care_circle_id)
+          .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+    ]);
+    const queryError = memberResult.error ?? invitationResult.error ?? circleResult.error;
+    if (queryError) throw queryError;
+
+    setCareCircle((memberResult.data ?? []).map((member) => ({
+      id: member.id,
+      name: member.full_name,
+      role: member.role,
+      type: member.role as Role,
+    })));
+    setCircleInvitations((invitationResult.data ?? []) as CircleInvitation[]);
+    setEmergencyContact({
+      name: circleResult.data?.emergency_contact_name ?? '',
+      phone: circleResult.data?.emergency_contact_phone ?? '',
+    });
+  }, [profile]);
+
+  const inviteCircleMember = useCallback(async (email: string, role: 'family' | 'caregiver') => {
+    const { error } = await supabase.rpc('invite_circle_member', {
+      invite_email: email.trim().toLowerCase(),
+      invite_role: role,
+    });
+    if (error) throw error;
+    await refreshCareCircleData();
+  }, [refreshCareCircleData]);
+
+  const cancelCircleInvitation = useCallback(async (id: string) => {
+    const { error } = await supabase.rpc('cancel_circle_invitation', { invitation_id: id });
+    if (error) throw error;
+    await refreshCareCircleData();
+  }, [refreshCareCircleData]);
+
+  const respondToCircleInvitation = useCallback(async (id: string, accept: boolean) => {
+    const { error } = await supabase.rpc('respond_to_circle_invitation', {
+      invitation_id: id,
+      accept_invitation: accept,
+    });
+    if (error) throw error;
+    if (accept && session) {
+      const nextProfile = await loadProfile(session.user.id);
+      setProfile(nextProfile);
+    }
+    await refreshCareCircleData();
+    await refreshCareData();
+    await refreshSOSData();
+  }, [refreshCareCircleData, refreshCareData, refreshSOSData, session]);
+
+  const removeCircleMember = useCallback(async (id: string) => {
+    const { error } = await supabase.rpc('remove_circle_member', { member_id: id });
+    if (error) throw error;
+    await refreshCareCircleData();
+  }, [refreshCareCircleData]);
+
+  const updateEmergencyContact = useCallback(async (name: string, phone: string) => {
+    const { error } = await supabase.rpc('update_circle_emergency_contact', {
+      contact_name: name,
+      contact_phone: phone,
+    });
+    if (error) throw error;
+    await refreshCareCircleData();
+  }, [refreshCareCircleData]);
+
   useEffect(() => {
     if (!profile) {
       setSosEvents([]);
@@ -566,6 +704,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
       void supabase.removeChannel(channel);
     };
   }, [profile?.care_circle_id, profile?.id, refreshCareData]);
+
+  useEffect(() => {
+    if (!profile) {
+      setCareCircle([]);
+      setCircleInvitations([]);
+      setEmergencyContact({ name: '', phone: '' });
+      return;
+    }
+
+    let active = true;
+    const load = async () => {
+      try {
+        await refreshCareCircleData();
+      } catch (error) {
+        if (active) console.error('Unable to refresh care circle data:', error);
+      }
+    };
+    void load();
+    const channel = supabase
+      .channel(`care-circle-${profile.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'invitations' }, () => void load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => void load())
+      .subscribe((status, error) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error(`Care circle Realtime subscription ${status.toLowerCase()}:`, error);
+        }
+      });
+    return () => {
+      active = false;
+      void supabase.removeChannel(channel);
+    };
+  }, [profile, refreshCareCircleData]);
 
   const confirmDose = useCallback(async (doseId: string) => {
     const { error } = await supabase.rpc('confirm_dose', { dose_id: doseId });
@@ -757,23 +927,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [caregivers, addTimelineEntry, emitBridgeyEvent]
   );
 
-  const inviteFamilyMember = useCallback(
-    (name: string, email: string, role: string, location: string) => {
-      const id = genId('f');
-      setCareCircle((prev) => [
-        ...prev,
-        { id, name, role, location, type: 'family' as const },
-      ]);
-      addTimelineEntry({
-        type: 'note',
-        title: `Family member invited: ${name}`,
-        description: `${role} in ${location} invited to the Care Circle.`,
-        timestamp: new Date().toISOString(),
-      });
-    },
-    [addTimelineEntry]
-  );
-
   const toggleTask = useCallback((id: string) => {
     const task = caregiverTasks.find((item) => item.id === id);
     if (task && !task.done) emitBridgeyEvent('task-completed', id);
@@ -804,8 +957,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: AppContextValue = {
     profile,
+    userEmail,
     authLoading,
     signIn,
+    signUp,
     signOut,
     currentRole,
     bridgeySection,
@@ -840,7 +995,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     caregivers,
     requestCaregiver,
     careCircle,
-    inviteFamilyMember,
+    circleInvitations,
+    emergencyContact,
+    refreshCareCircleData,
+    inviteCircleMember,
+    cancelCircleInvitation,
+    respondToCircleInvitation,
+    removeCircleMember,
+    updateEmergencyContact,
     caregiverTasks,
     toggleTask,
     adminUsers,

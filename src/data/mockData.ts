@@ -82,8 +82,8 @@ export interface CareCircleMember {
   id: string;
   name: string;
   role: string;
-  location: string;
-  type: 'family' | 'caregiver';
+  location?: string;
+  type: Role;
 }
 
 export interface CaregiverTask {

@@ -1,12 +1,14 @@
 import { useState, type FormEvent } from 'react';
-import { ArrowLeft, ArrowRight, Heart, LockKeyhole, Mail } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Heart, Mail } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
+import PasswordInput from '@/components/PasswordInput';
 
 interface LoginProps {
   onBack: () => void;
+  onSignUp: () => void;
 }
 
-export default function Login({ onBack }: LoginProps) {
+export default function Login({ onBack, onSignUp }: LoginProps) {
   const { signIn } = useApp();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -67,18 +69,12 @@ export default function Login({ onBack }: LoginProps) {
             </label>
             <label className="block text-sm font-semibold text-neutral-700">
               Password
-              <span className="relative mt-2 block">
-                <LockKeyhole className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-                <input
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  className="w-full rounded-xl border px-10 py-3 text-base font-normal outline-none focus:ring-2 focus:ring-primary-400"
-                  placeholder="Enter your password"
-                />
-              </span>
+              <PasswordInput
+                autoComplete="current-password"
+                value={password}
+                onChange={setPassword}
+                placeholder="Enter your password"
+              />
             </label>
 
             {error && <p role="alert" className="rounded-lg bg-danger-50 px-3 py-2 text-sm text-danger-700">{error}</p>}
@@ -88,6 +84,12 @@ export default function Login({ onBack }: LoginProps) {
               {!submitting && <ArrowRight className="w-5 h-5" />}
             </button>
           </form>
+          <p className="mt-5 text-center text-sm text-neutral-500">
+            New to CareBridge?{' '}
+            <button type="button" onClick={onSignUp} className="font-semibold text-primary-700 hover:underline">
+              Create an account
+            </button>
+          </p>
         </div>
       </section>
     </main>
