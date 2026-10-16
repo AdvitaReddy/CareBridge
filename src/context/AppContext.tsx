@@ -4,10 +4,12 @@ import {
   useState,
   useCallback,
   useEffect,
+  useRef,
   type ReactNode,
 } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/supabaseClient';
+import useOnceMessage from '@/hooks/useOnceMessage';
 import {
   type Medicine,
   type Appointment,
@@ -19,7 +21,6 @@ import {
   type AdminUser,
   type Role,
   seedAppointments,
-  seedSOSEvents,
   seedTimeline,
   seedCaregivers,
   seedCareCircle,
@@ -36,9 +37,7 @@ interface AppContextValue {
   currentRole: Role | null;
   bridgeySection: string;
   setBridgeySection: (section: string) => void;
-  bridgeyEvent: { type: 'medicine-taken' | 'medicines-complete' | 'appointment-added' | 'caregiver-added' | 'task-completed' | 'sos-triggered' | 'sos-resolved'; id: number } | null;
-  sosConfirmationOpen: boolean;
-  setSosConfirmationOpen: (open: boolean) => void;
+  bridgeyEvent: { type: 'medicine-taken' | 'medicines-complete' | 'appointment-added' | 'caregiver-added' | 'task-completed' | 'sos-triggered' | 'sos-resolved'; id: string } | null;
 
   // Medicines
   medicines: Medicine[];
@@ -62,8 +61,12 @@ interface AppContextValue {
 
   // SOS
   sosEvents: SOSEvent[];
-  triggerSOS: () => void;
-  resolveSOS: (id: string, resolvedBy: string) => void;
+  sosCancelSeconds: number;
+  triggerSOS: (location: { latitude: number | null; longitude: number | null }) => Promise<void>;
+  cancelSOSCountdown: () => Promise<void>;
+  acknowledgeSOS: (id: string) => Promise<void>;
+  resolveSOS: (id: string) => Promise<void>;
+  runDemoSOSAction: (action: 'demo_trigger_sos' | 'demo_escalate_sos') => Promise<void>;
   activeSOS: SOSEvent | null;
 
   // Timeline
@@ -118,6 +121,8 @@ export interface CareNotification {
   type: string;
   message: string;
   linked_id: string | null;
+  recipient_id: string | null;
+  priority: 'low' | 'normal' | 'high';
   read: boolean;
   created_at: string;
 }
@@ -150,13 +155,23 @@ function genId(prefix: string): string {
   return `${prefix}${idCounter}`;
 }
 
+const knownSOSStatuses = new Map<string, SOSEvent['status']>();
+const pendingRealtimeSOSResolutions = new Map<string, SOSEvent['status']>();
+const SOS_TIMESTAMP_CLOCK_SKEW_MS = 60_000;
+
+function resolvedAfterLastVisible(resolvedAt: string | undefined, lastVisibleAt: number) {
+  if (lastVisibleAt === 0) return true;
+  if (!resolvedAt) return false;
+  return new Date(resolvedAt).getTime() >= lastVisibleAt - SOS_TIMESTAMP_CLOCK_SKEW_MS;
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [bridgeySection, setBridgeySection] = useState('landing');
   const [bridgeyEvent, setBridgeyEvent] = useState<AppContextValue['bridgeyEvent']>(null);
-  const [sosConfirmationOpen, setSosConfirmationOpen] = useState(false);
+  const [sosCancelSeconds, setSosCancelSeconds] = useState(10);
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [doses, setDoses] = useState<CareDose[]>([]);
   const [notifications, setNotifications] = useState<CareNotification[]>([]);
@@ -164,22 +179,63 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [careLoading, setCareLoading] = useState(false);
   const [careError, setCareError] = useState<string | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>(seedAppointments);
-  const [sosEvents, setSosEvents] = useState<SOSEvent[]>(seedSOSEvents);
+  const [sosEvents, setSosEvents] = useState<SOSEvent[]>([]);
   const [timeline, setTimeline] = useState<TimelineEntry[]>(seedTimeline);
   const [caregivers, setCaregivers] = useState<Caregiver[]>(seedCaregivers);
   const [careCircle, setCareCircle] = useState<CareCircleMember[]>(seedCareCircle);
   const [caregiverTasks, setCaregiverTasks] = useState<CaregiverTask[]>(seedCaregiverTasks);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>(seedAdminUsers);
+  const sessionUserId = useRef<string | null>(null);
+  const activeBridgeyEventKey = useRef<string | null>(null);
+  const lastVisibleAt = useRef(0);
+  const sosHydratedUserId = useRef<string | null>(null);
+  const { showOnceMessage: showBridgeyMessage } = useOnceMessage(
+    profile ? `seen_bridgey_messages:${profile.id}` : null
+  );
+  const { markSeen: markSOSResolvedSeen, showOnceMessage: showSOSResolvedMessage } = useOnceMessage(
+    profile ? `seen_sos_resolved:${profile.id}` : null
+  );
 
-  const activeSOS = sosEvents.find((s) => s.status === 'active') ?? null;
+  const emitBridgeyEvent = useCallback((
+    type: NonNullable<AppContextValue['bridgeyEvent']>['type'],
+    id: string,
+  ) => {
+    const eventKey = `${type}:${id}`;
+    const display = () => setBridgeyEvent({ type, id });
+    const show = () => {
+      activeBridgeyEventKey.current = eventKey;
+      display();
+      window.setTimeout(() => {
+        if (activeBridgeyEventKey.current === eventKey) {
+          activeBridgeyEventKey.current = null;
+          setBridgeyEvent((current) => current?.type === type && current.id === id ? null : current);
+        }
+      }, 6000);
+    };
+    if (type === 'sos-resolved') {
+      showSOSResolvedMessage(id, show);
+    } else if (type !== 'sos-triggered') {
+      showBridgeyMessage(eventKey, show);
+    } else {
+      display();
+    }
+  }, [showBridgeyMessage, showSOSResolvedMessage]);
+
+  const activeSOS = sosEvents.find((s) => ['active', 'acknowledged', 'escalated'].includes(s.status)) ?? null;
 
   useEffect(() => {
     let active = true;
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (!active) return;
+      const nextUserId = nextSession?.user.id ?? null;
+      if (sessionUserId.current === nextUserId) return;
+      sessionUserId.current = nextUserId;
+      sosHydratedUserId.current = null;
       setSession(nextSession);
       if (!nextSession) {
         setProfile(null);
+        setBridgeyEvent(null);
+        activeBridgeyEventKey.current = null;
         setAuthLoading(false);
       } else {
         setAuthLoading(true);
@@ -188,8 +244,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     supabase.auth.getSession().then(({ data, error }) => {
       if (!active) return;
-      setSession(error ? null : data.session);
-      if (error || !data.session) setAuthLoading(false);
+      const nextSession = error ? null : data.session;
+      const nextUserId = nextSession?.user.id ?? null;
+      if (sessionUserId.current !== nextUserId) {
+        sessionUserId.current = nextUserId;
+        sosHydratedUserId.current = null;
+        setSession(nextSession);
+        if (!nextSession) setAuthLoading(false);
+        else setAuthLoading(true);
+      } else if (!nextSession) {
+        setAuthLoading(false);
+      }
     });
 
     return () => {
@@ -236,6 +301,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         is_demo: email.trim().toLowerCase().endsWith('@demo.com'),
       });
       if (auditError) throw auditError;
+      sessionUserId.current = data.user.id;
+      sosHydratedUserId.current = null;
       setSession(data.session);
       setProfile(nextProfile);
       setAuthLoading(false);
@@ -248,8 +315,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+    sessionUserId.current = null;
+    sosHydratedUserId.current = null;
+    activeBridgeyEventKey.current = null;
     setSession(null);
     setProfile(null);
+    setBridgeyEvent(null);
   }, []);
 
   const currentRole = profile?.role ?? null;
@@ -319,6 +390,145 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCareError(null);
   }, [profile?.care_circle_id]);
 
+  const refreshSOSData = useCallback(async () => {
+    if (!profile?.id) return;
+
+    const [sosResult, configResult] = await Promise.all([
+      supabase.from('sos_events').select('*').order('triggered_at', { ascending: false }).limit(50),
+      supabase.from('app_config').select('value').eq('key', 'sos_cancel_seconds').maybeSingle(),
+    ]);
+    const initialError = sosResult.error ?? configResult.error;
+    if (initialError) throw initialError;
+
+    const rows = sosResult.data ?? [];
+    const eventIds = rows.map((event) => event.id);
+    const [profileResult, notificationResult] = await Promise.all([
+      supabase.from('profiles').select('id, full_name').order('full_name'),
+      eventIds.length
+        ? supabase.from('notifications').select('linked_id, recipient_id').in('linked_id', eventIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    const relatedError = profileResult.error ?? notificationResult.error;
+    if (relatedError) throw relatedError;
+
+    const profilesById = new Map((profileResult.data ?? []).map((person) => [person.id, person.full_name]));
+    const recipientsBySOS = new Map<string, string[]>();
+    for (const notification of notificationResult.data ?? []) {
+      if (!notification.linked_id || !notification.recipient_id) continue;
+      const recipientName = profilesById.get(notification.recipient_id);
+      if (!recipientName) continue;
+      const recipients = recipientsBySOS.get(notification.linked_id) ?? [];
+      if (!recipients.includes(recipientName)) recipients.push(recipientName);
+      recipientsBySOS.set(notification.linked_id, recipients);
+    }
+
+    setSosCancelSeconds(Math.max(1, Number(configResult.data?.value) || 10));
+    const nextEvents = rows.map((event) => ({
+      id: event.id,
+      careCircleId: event.care_circle_id,
+      timestamp: event.triggered_at,
+      triggeredBy: profilesById.get(event.triggered_by) ?? 'Care circle member',
+      triggeredById: event.triggered_by,
+      status: event.status,
+      latitude: event.latitude,
+      longitude: event.longitude,
+      acknowledgedBy: event.acknowledged_by,
+      acknowledgedAt: event.acknowledged_at ?? undefined,
+      responderName: event.acknowledged_by ? profilesById.get(event.acknowledged_by) ?? 'Care circle responder' : undefined,
+      escalatedAt: event.escalated_at ?? undefined,
+      resolvedAt: event.resolved_at ?? undefined,
+      resolvedById: event.resolved_by,
+      resolvedBy: event.resolved_by ? profilesById.get(event.resolved_by) ?? 'Care circle responder' : undefined,
+      notifiedMembers: recipientsBySOS.get(event.id) ?? [],
+    })) as SOSEvent[];
+    for (const event of nextEvents) {
+      const statusKey = `${profile.id}:${event.id}`;
+      const previousStatus = knownSOSStatuses.get(statusKey);
+      if (event.status === 'resolved') {
+        if (sosHydratedUserId.current !== profile.id || !previousStatus) {
+          markSOSResolvedSeen(event.id);
+        } else if (['active', 'acknowledged', 'escalated'].includes(previousStatus)) {
+          if (
+            document.visibilityState === 'visible'
+            && resolvedAfterLastVisible(event.resolvedAt, lastVisibleAt.current)
+          ) {
+            pendingRealtimeSOSResolutions.set(statusKey, previousStatus);
+          } else {
+            markSOSResolvedSeen(event.id);
+          }
+        }
+      }
+      knownSOSStatuses.set(statusKey, event.status);
+    }
+    sosHydratedUserId.current = profile.id;
+    setSosEvents(nextEvents);
+  }, [markSOSResolvedSeen, profile?.id]);
+
+  useEffect(() => {
+    if (!profile) {
+      setSosEvents([]);
+      return;
+    }
+
+    let active = true;
+    const refresh = async () => {
+      try {
+        const { error } = await supabase.rpc('refresh_sos_states');
+        if (error) throw error;
+        await refreshSOSData();
+      } catch (error) {
+        if (active) console.error('Unable to refresh SOS data:', error);
+      }
+    };
+    void refresh();
+    const intervalId = window.setInterval(() => void refresh(), 10_000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') lastVisibleAt.current = Date.now();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    const channel = supabase
+      .channel(`sos-data-${profile.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sos_events' }, (payload) => {
+        const event = payload.new as { id?: string; status?: SOSEvent['status']; resolved_at?: string | null };
+        if (event.id && event.status) {
+          const statusKey = `${profile.id}:${event.id}`;
+          const previousStatus = knownSOSStatuses.get(statusKey);
+          const pendingStatus = pendingRealtimeSOSResolutions.get(statusKey);
+          const wasOpen = (previousStatus !== undefined
+            && ['active', 'acknowledged', 'escalated'].includes(previousStatus))
+            || (pendingStatus !== undefined
+              && ['active', 'acknowledged', 'escalated'].includes(pendingStatus));
+          if (event.status === 'resolved') {
+            if (
+              wasOpen
+              && resolvedAfterLastVisible(event.resolved_at ?? undefined, lastVisibleAt.current)
+              && document.visibilityState === 'visible'
+            ) {
+              emitBridgeyEvent('sos-resolved', event.id);
+            } else {
+              markSOSResolvedSeen(event.id);
+            }
+            pendingRealtimeSOSResolutions.delete(statusKey);
+          }
+          knownSOSStatuses.set(statusKey, event.status);
+        }
+        void refresh();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => void refresh())
+      .subscribe((status, error) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error(`SOS Realtime subscription ${status.toLowerCase()}:`, error);
+        }
+      });
+
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      void supabase.removeChannel(channel);
+    };
+  }, [emitBridgeyEvent, markSOSResolvedSeen, profile, refreshSOSData]);
+
   useEffect(() => {
     if (!profile?.care_circle_id) {
       setMedicines([]);
@@ -360,8 +570,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const confirmDose = useCallback(async (doseId: string) => {
     const { error } = await supabase.rpc('confirm_dose', { dose_id: doseId });
     if (error) throw error;
+    emitBridgeyEvent('medicine-taken', doseId);
     await refreshCareData();
-  }, [refreshCareData]);
+
+    const today = new Date();
+    const dateKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const start = new Date(today);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    const { data: todayDoses, error: dosesError } = await supabase
+      .from('doses')
+      .select('status')
+      .gte('scheduled_at', start.toISOString())
+      .lt('scheduled_at', end.toISOString());
+    if (dosesError) throw dosesError;
+    if (todayDoses?.length && todayDoses.every((dose) => dose.status === 'taken' || dose.status === 'taken_late')) {
+      emitBridgeyEvent('medicines-complete', dateKey);
+    }
+  }, [emitBridgeyEvent, refreshCareData]);
 
   const addMedicine = useCallback(async (medicine: Pick<Medicine, 'name' | 'dosage' | 'times'>) => {
     if (!profile?.care_circle_id) throw new Error('No care circle is linked to this account.');
@@ -420,7 +647,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setAppointments((prev) =>
         [...prev, newAppt].sort((a, b) => a.date.localeCompare(b.date))
       );
-      setBridgeyEvent({ type: 'appointment-added', id: Date.now() });
+      emitBridgeyEvent('appointment-added', newAppt.id);
       addTimelineEntry({
         type: 'appointment',
         title: `Appointment scheduled: ${appt.doctorName}`,
@@ -429,7 +656,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         status: 'upcoming',
       });
     },
-    [addTimelineEntry]
+    [addTimelineEntry, emitBridgeyEvent]
   );
 
   const addAppointmentSummary = useCallback(
@@ -450,43 +677,56 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [appointments, addTimelineEntry]
   );
 
-  const triggerSOS = useCallback(() => {
-    const newEvent: SOSEvent = {
-      id: genId('s'),
-      timestamp: new Date().toISOString(),
-      triggeredBy: 'Venkat Rao',
-      status: 'active',
-    };
-    setSosEvents((prev) => [newEvent, ...prev]);
-    setBridgeyEvent({ type: 'sos-triggered', id: Date.now() });
-    addTimelineEntry({
-      type: 'sos',
-      title: 'SOS Alert Triggered',
-      description: 'Emergency SOS activated by Venkat Rao.',
-      timestamp: newEvent.timestamp,
-      status: 'active',
+  const triggerSOS = useCallback(async (location: { latitude: number | null; longitude: number | null }) => {
+    if (!profile?.care_circle_id) throw new Error('No care circle is linked to this account.');
+    const { error } = await supabase.from('sos_events').insert({
+      care_circle_id: profile.care_circle_id,
+      triggered_by: profile.id,
+      latitude: location.latitude,
+      longitude: location.longitude,
     });
-  }, [addTimelineEntry]);
+    if (error) throw error;
+    emitBridgeyEvent('sos-triggered', `${Date.now()}`);
+    await refreshSOSData();
+  }, [emitBridgeyEvent, profile?.care_circle_id, profile?.id, refreshSOSData]);
 
-  const resolveSOS = useCallback(
-    (id: string, resolvedBy: string) => {
-      const resolvedAt = new Date().toISOString();
-      setSosEvents((prev) =>
-        prev.map((s) =>
-          s.id === id ? { ...s, status: 'resolved' as const, resolvedAt, resolvedBy } : s
-        )
-      );
-      setBridgeyEvent({ type: 'sos-resolved', id: Date.now() });
-      addTimelineEntry({
-        type: 'sos',
-        title: 'SOS Resolved',
-        description: `Emergency resolved by ${resolvedBy}.`,
-        timestamp: resolvedAt,
-        status: 'resolved',
-      });
-    },
-    [addTimelineEntry]
-  );
+  const cancelSOSCountdown = useCallback(async () => {
+    if (!profile) throw new Error('A signed-in user is required.');
+    const { error } = await supabase.from('audit_log').insert({
+      actor: profile.id,
+      action: 'sos_countdown_cancelled',
+      target: `care_circle:${profile.care_circle_id ?? 'unassigned'}`,
+      is_demo: false,
+    });
+    if (error) throw error;
+  }, [profile]);
+
+  const acknowledgeSOS = useCallback(async (id: string) => {
+    const { error } = await supabase.rpc('acknowledge_sos', { sos_id: id });
+    if (error) throw error;
+    await refreshSOSData();
+  }, [refreshSOSData]);
+
+  const resolveSOS = useCallback(async (id: string) => {
+    const statusKey = profile?.id ? `${profile.id}:${id}` : null;
+    const previousStatus = statusKey ? knownSOSStatuses.get(statusKey) : undefined;
+    const { error } = await supabase.rpc('resolve_sos', { sos_id: id });
+    if (error) throw error;
+    if (statusKey) knownSOSStatuses.set(statusKey, 'resolved');
+    if (statusKey) pendingRealtimeSOSResolutions.delete(statusKey);
+    if (previousStatus && ['active', 'acknowledged', 'escalated'].includes(previousStatus)) {
+      emitBridgeyEvent('sos-resolved', id);
+    } else {
+      markSOSResolvedSeen(id);
+    }
+    await refreshSOSData();
+  }, [emitBridgeyEvent, markSOSResolvedSeen, profile?.id, refreshSOSData]);
+
+  const runDemoSOSAction = useCallback(async (action: 'demo_trigger_sos' | 'demo_escalate_sos') => {
+    const { error } = await supabase.rpc(action);
+    if (error) throw error;
+    await refreshSOSData();
+  }, [refreshSOSData]);
 
   const requestCaregiver = useCallback(
     (id: string) => {
@@ -505,7 +745,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             type: 'caregiver' as const,
           },
         ]);
-        setBridgeyEvent({ type: 'caregiver-added', id: Date.now() });
+        emitBridgeyEvent('caregiver-added', id);
         addTimelineEntry({
           type: 'caregiver',
           title: `Caregiver added: ${cg.name}`,
@@ -514,7 +754,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [caregivers, addTimelineEntry]
+    [caregivers, addTimelineEntry, emitBridgeyEvent]
   );
 
   const inviteFamilyMember = useCallback(
@@ -536,11 +776,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const toggleTask = useCallback((id: string) => {
     const task = caregiverTasks.find((item) => item.id === id);
-    if (task && !task.done) setBridgeyEvent({ type: 'task-completed', id: Date.now() });
+    if (task && !task.done) emitBridgeyEvent('task-completed', id);
     setCaregiverTasks((prev) =>
       prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t))
     );
-  }, [caregiverTasks]);
+  }, [caregiverTasks, emitBridgeyEvent]);
 
   const approveUser = useCallback((id: string) => {
     setAdminUsers((prev) =>
@@ -571,8 +811,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     bridgeySection,
     setBridgeySection,
     bridgeyEvent,
-    sosConfirmationOpen,
-    setSosConfirmationOpen,
     medicines,
     doses,
     careLoading,
@@ -590,8 +828,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addAppointment,
     addAppointmentSummary,
     sosEvents,
+    sosCancelSeconds,
     triggerSOS,
+    cancelSOSCountdown,
+    acknowledgeSOS,
     resolveSOS,
+    runDemoSOSAction,
     activeSOS,
     timeline,
     addTimelineEntry,

@@ -24,15 +24,25 @@ export interface Appointment {
   summary?: string;
 }
 
-export type SOSSstatus = 'active' | 'resolved';
+export type SOSSstatus = 'active' | 'acknowledged' | 'escalated' | 'resolved' | 'cancelled';
 
 export interface SOSEvent {
   id: string;
+  careCircleId: string;
   timestamp: string; // ISO
   triggeredBy: string;
+  triggeredById: string;
   status: SOSSstatus;
+  latitude: number | null;
+  longitude: number | null;
+  acknowledgedBy: string | null;
+  acknowledgedAt?: string;
+  responderName?: string;
+  escalatedAt?: string;
   resolvedAt?: string;
+  resolvedById: string | null;
   resolvedBy?: string;
+  notifiedMembers: string[];
   note?: string;
 }
 
@@ -196,20 +206,38 @@ export const seedAppointments: Appointment[] = [
 export const seedSOSEvents: SOSEvent[] = [
   {
     id: 's1',
+    careCircleId: 'demo-circle',
     timestamp: '2026-09-08T14:30:00',
     triggeredBy: 'Venkat Rao',
+    triggeredById: 'e1',
     status: 'resolved',
+    latitude: null,
+    longitude: null,
+    acknowledgedBy: 'f1',
+    acknowledgedAt: '2026-09-08T14:35:00',
+    responderName: 'Ravi Rao',
+    resolvedById: 'f1',
     resolvedAt: '2026-09-08T14:45:00',
     resolvedBy: 'Ravi Rao',
+    notifiedMembers: [],
     note: 'Fell in the bathroom. Neighbour helped. Family was alerted immediately.',
   },
   {
     id: 's2',
+    careCircleId: 'demo-circle',
     timestamp: '2026-09-03T19:15:00',
     triggeredBy: 'Venkat Rao',
+    triggeredById: 'e1',
     status: 'resolved',
+    latitude: null,
+    longitude: null,
+    acknowledgedBy: 'c1',
+    acknowledgedAt: '2026-09-03T19:20:00',
+    responderName: 'Lakshmi Devi',
+    resolvedById: 'c1',
     resolvedAt: '2026-09-03T19:50:00',
     resolvedBy: 'Lakshmi Devi',
+    notifiedMembers: [],
     note: 'Severe chest pain. Caregiver attended and called doctor.',
   },
 ];

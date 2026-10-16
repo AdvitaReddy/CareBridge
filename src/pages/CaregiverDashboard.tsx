@@ -61,7 +61,7 @@ export default function CaregiverDashboard({ onBack }: CaregiverDashboardProps) 
         {/* SOS Banner */}
         {activeSOS && (
           <div className="mb-6">
-            <SOSBanner canResolve />
+            <SOSBanner />
           </div>
         )}
 
@@ -227,7 +227,7 @@ export default function CaregiverDashboard({ onBack }: CaregiverDashboardProps) 
               SOS Alerts & History
             </h3>
             {activeSOS ? (
-              <SOSBanner canResolve />
+              <SOSBanner />
             ) : (
               <div className="card p-5 text-center">
                 <div className="w-12 h-12 rounded-full bg-success-100 text-success-600 flex items-center justify-center mx-auto mb-3">
@@ -243,7 +243,7 @@ export default function CaregiverDashboard({ onBack }: CaregiverDashboardProps) 
                 {sosHistory.map((event) => (
                   <div key={event.id} className="card p-3 flex items-center gap-3">
                     <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-                      event.status === 'active' ? 'bg-danger-100 text-danger-600' : 'bg-success-100 text-success-600'
+                      ['active', 'acknowledged', 'escalated'].includes(event.status) ? 'bg-danger-100 text-danger-600' : 'bg-success-100 text-success-600'
                     }`}>
                       <AlertTriangle className="w-5 h-5" />
                     </div>
@@ -254,8 +254,13 @@ export default function CaregiverDashboard({ onBack }: CaregiverDashboardProps) 
                       <p className="text-xs text-neutral-500">
                         {formatDate(event.timestamp)} · {event.status}
                       </p>
+                      {event.responderName && (
+                        <p className="text-xs font-semibold text-success-700 mt-1">
+                          {event.responderName} responded · Help is on the way
+                        </p>
+                      )}
                     </div>
-                    <span className={`badge ${event.status === 'active' ? 'bg-danger-100 text-danger-700' : 'bg-success-100 text-success-700'}`}>
+                    <span className={`badge ${['active', 'acknowledged', 'escalated'].includes(event.status) ? 'bg-danger-100 text-danger-700' : 'bg-success-100 text-success-700'}`}>
                       {event.status}
                     </span>
                   </div>

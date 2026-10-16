@@ -6,6 +6,11 @@ const eventPresentation: Record<string, { label: string; icon: typeof Pill; colo
   dose_missed: { label: 'Dose missed', icon: AlertCircle, color: 'text-danger-600 bg-danger-100' },
   dose_taken: { label: 'Dose taken', icon: CheckCircle2, color: 'text-success-600 bg-success-100' },
   dose_taken_late: { label: 'Dose taken late', icon: Pill, color: 'text-warning-700 bg-warning-100' },
+  sos_triggered: { label: 'SOS triggered', icon: AlertCircle, color: 'text-danger-600 bg-danger-100' },
+  sos_acknowledged: { label: 'SOS acknowledged', icon: CheckCircle2, color: 'text-warning-700 bg-warning-100' },
+  sos_escalated: { label: 'SOS escalated', icon: AlertCircle, color: 'text-danger-600 bg-danger-100' },
+  sos_resolved: { label: 'SOS resolved', icon: CheckCircle2, color: 'text-success-600 bg-success-100' },
+  sos_cancelled: { label: 'SOS cancelled', icon: AlertCircle, color: 'text-neutral-600 bg-neutral-100' },
   note: { label: 'Care note', icon: FileText, color: 'text-accent-700 bg-accent-100' },
 };
 

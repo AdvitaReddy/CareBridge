@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Bridgey, { type BridgeyExpression } from '@/components/Bridgey';
 import { useApp } from '@/context/AppContext';
 
@@ -13,6 +13,7 @@ export default function BridgeyHero({ eyebrow, message, expression = 'happy', ac
   const { bridgeyEvent } = useApp();
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [showPersonality, setShowPersonality] = useState(() => Math.random() < 0.2);
+  const lastEventKey = useRef(bridgeyEvent ? `${bridgeyEvent.type}:${bridgeyEvent.id}` : null);
 
   useEffect(() => {
     setShowPersonality(Math.random() < 0.2);
@@ -20,6 +21,9 @@ export default function BridgeyHero({ eyebrow, message, expression = 'happy', ac
 
   useEffect(() => {
     if (!bridgeyEvent) return;
+    const eventKey = `${bridgeyEvent.type}:${bridgeyEvent.id}`;
+    if (lastEventKey.current === eventKey) return;
+    lastEventKey.current = eventKey;
     if (bridgeyEvent.type === 'sos-triggered') {
       setActionMessage(null);
       return;
