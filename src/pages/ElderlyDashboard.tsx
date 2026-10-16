@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AlertTriangle, Pill, Calendar, Check, Clock, MapPin } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
-import { elderlyPerson, appointmentBadge, formatClockTime, formatDate, formatDateTime } from '@/data/mockData';
+import { elderlyPerson, formatDateTime } from '@/data/mockData';
 import DashboardHeader from '@/components/DashboardHeader';
 import Disclaimer from '@/components/Disclaimer';
 import BridgeyHero from '@/components/BridgeyHero';
@@ -22,11 +22,18 @@ export default function ElderlyDashboard({ onBack }: ElderlyDashboardProps) {
   const [sosTriggered, setSosTriggered] = useState(false);
   const [sosLocationUnavailable, setSosLocationUnavailable] = useState(false);
   const [doseError, setDoseError] = useState<string | null>(null);
+  const [appointmentClock, setAppointmentClock] = useState(Date.now());
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setAppointmentClock(Date.now()), 30_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   const actionableDoses = doses.filter((dose) => ['scheduled', 'due', 'missed'].includes(dose.status));
   const nextDose = actionableDoses[0];
   const upcomingAppts = appointments
-    .filter((a) => new Date(a.date + 'T00:00:00') >= new Date('2026-09-12T00:00:00'))
+    .filter((appointment) => appointment.status === 'scheduled'
+      && new Date(`${appointment.date}T${appointment.time}`).getTime() >= appointmentClock)
     .slice(0, 3);
   const medicinesRemaining = actionableDoses.length;
   const heroMessage = activeSOS
@@ -180,7 +187,13 @@ export default function ElderlyDashboard({ onBack }: ElderlyDashboardProps) {
           {upcomingAppts.length > 0 ? (
             <div className="space-y-3">
               {upcomingAppts.map((appt) => {
-                const badge = appointmentBadge(appt.date);
+                const scheduledAt = new Date(`${appt.date}T${appt.time}`);
+                const totalMinutes = Math.max(0, Math.floor((scheduledAt.getTime() - appointmentClock) / 60_000));
+                const countdown = totalMinutes >= 24 * 60
+                  ? `${Math.floor(totalMinutes / (24 * 60))}d ${Math.floor((totalMinutes % (24 * 60)) / 60)}h`
+                  : totalMinutes >= 60
+                    ? `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`
+                    : `${totalMinutes}m`;
                 return (
                   <div key={appt.id} className="card p-5">
                     <div className="flex items-start gap-3">
@@ -195,7 +208,7 @@ export default function ElderlyDashboard({ onBack }: ElderlyDashboardProps) {
                         <div className="mt-2 space-y-1.5">
                           <p className="text-base text-neutral-600 flex items-center gap-2">
                             <Clock className="w-5 h-5 text-neutral-400" />
-                            {formatDate(appt.date)} at {formatClockTime(appt.time)}
+                            {formatDateTime(scheduledAt.toISOString())}
                           </p>
                           <p className="text-base text-neutral-600 flex items-center gap-2">
                             <MapPin className="w-5 h-5 text-neutral-400" />
@@ -203,16 +216,18 @@ export default function ElderlyDashboard({ onBack }: ElderlyDashboardProps) {
                           </p>
                         </div>
                         <span
-                          className={`inline-flex mt-3 px-3 py-1.5 rounded-full text-sm font-semibold ${
-                            badge.color === 'danger'
-                              ? 'bg-danger-100 text-danger-700'
-                              : badge.color === 'accent'
-                                ? 'bg-accent-100 text-accent-700'
-                                : 'bg-primary-100 text-primary-700'
-                          }`}
+                          className="inline-flex mt-3 px-3 py-1.5 rounded-full text-sm font-semibold bg-primary-100 text-primary-700"
                         >
-                          {badge.label}
+                          Upcoming
                         </span>
+                        <p className="inline-flex mt-3 px-3 py-1.5 rounded-full text-sm font-semibold bg-primary-100 text-primary-700">
+                          <Clock className="w-4 h-4 mr-1" /> In {countdown}
+                        </p>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {appt.reminder24hSent && <span className="badge bg-secondary-100 text-secondary-700">24h reminder sent</span>}
+                          {appt.reminder1hSent && <span className="badge bg-accent-100 text-accent-700">1h reminder sent</span>}
+                          {!appt.reminder24hSent && !appt.reminder1hSent && <span className="badge bg-neutral-100 text-neutral-600">Reminders pending</span>}
+                        </div>
                       </div>
                     </div>
                   </div>

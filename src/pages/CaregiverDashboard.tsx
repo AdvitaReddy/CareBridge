@@ -11,6 +11,8 @@ import Disclaimer from '@/components/Disclaimer';
 import BridgeyHero from '@/components/BridgeyHero';
 import SharedTimeline from '@/components/SharedTimeline';
 import AssignedCareTasks from '@/components/AssignedCareTasks';
+import AppointmentCard from '@/components/AppointmentCard';
+import SummaryModal from '@/components/SummaryModal';
 
 interface CaregiverDashboardProps {
   onBack: () => void;
@@ -21,10 +23,8 @@ type Tab = 'today' | 'tasks' | 'schedule' | 'alerts';
 export default function CaregiverDashboard({ onBack }: CaregiverDashboardProps) {
   const { profile, tasks, appointments, activeSOS, sosEvents, medicines, timelineEvents } = useApp();
   const [activeTab, setActiveTab] = useState<Tab>('today');
-
-  const upcomingAppts = appointments.filter(
-    (a) => new Date(a.date + 'T00:00:00') >= new Date('2026-09-12T00:00:00')
-  );
+  const [showSummary, setShowSummary] = useState<string | null>(null);
+  const careAppointments = appointments.filter((appointment) => appointment.status !== 'cancelled');
   const assignedTasks = tasks.filter((task) => task.assigned_to === profile?.id);
   const pendingTasks = assignedTasks.filter((task) => task.status !== 'completed');
   const doneTasks = assignedTasks.filter((task) => task.status === 'completed');
@@ -151,30 +151,16 @@ export default function CaregiverDashboard({ onBack }: CaregiverDashboardProps) 
             <div>
               <h3 className="font-display font-bold text-lg text-neutral-800 mb-3 flex items-center gap-2">
                 <Stethoscope className="w-5 h-5 text-secondary-500" />
-                Upcoming Appointments
+                Care Circle Appointments
               </h3>
               <div className="space-y-3">
-                {upcomingAppts.map((appt) => (
-                  <div key={appt.id} className="card p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-secondary-100 text-secondary-600 flex items-center justify-center flex-shrink-0">
-                        <Stethoscope className="w-5 h-5" />
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-sm text-neutral-800">{appt.doctorName}</h4>
-                        <p className="text-xs text-neutral-500">{appt.specialty}</p>
-                        <p className="text-xs text-neutral-500 mt-1 flex items-center gap-1">
-                          <Calendar className="w-3.5 h-3.5" />
-                          {formatDate(appt.date)} at {formatClockTime(appt.time)}
-                        </p>
-                        <p className="text-xs text-neutral-500 flex items-center gap-1">
-                          <MapPin className="w-3.5 h-3.5" />
-                          {appt.location}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                {careAppointments.length ? careAppointments.map((appt) => (
+                  <AppointmentCard
+                    key={appt.id}
+                    appointment={appt}
+                    onAddSummary={(id) => setShowSummary(id)}
+                  />
+                )) : <p className="text-sm text-neutral-400">No appointments in the care circle.</p>}
               </div>
             </div>
           </div>
@@ -235,6 +221,14 @@ export default function CaregiverDashboard({ onBack }: CaregiverDashboardProps) 
       <div className="max-w-7xl mx-auto px-6 md:px-12 pb-6">
         <SharedTimeline events={timelineEvents} />
       </div>
+
+      {showSummary && (
+        <SummaryModal
+          appointmentId={showSummary}
+          doctorName={appointments.find((appointment) => appointment.id === showSummary)?.doctorName ?? ''}
+          onClose={() => setShowSummary(null)}
+        />
+      )}
 
       <footer className="py-6">
         <Disclaimer />

@@ -29,7 +29,7 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
   const {
     medicines, doses, appointments, sosEvents, caregivers, careCircle,
     requestCaregiver, activeSOS, setBridgeySection,
-    profile, timelineEvents, careLoading, careError, addCareTimelineEvent,
+    profile, timelineEvents, careLoading, careError, appointmentError, cancelAppointment, addCareTimelineEvent,
     circleInvitations, cancelCircleInvitation, removeCircleMember,
     emergencyContact, updateEmergencyContact,
   } = useApp();
@@ -37,10 +37,11 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
   const elderlyName = elderlyPerson.name;
   const elderlyLocation = elderlyPerson.location;
 
-    const [activeTab, setActiveTab] = useState<Tab>('timeline');
+  const [activeTab, setActiveTab] = useState<Tab>('timeline');
   const [showAddMed, setShowAddMed] = useState(false);
   const [editingMedicineId, setEditingMedicineId] = useState<string | null>(null);
   const [showAddAppt, setShowAddAppt] = useState(false);
+  const [editingAppointmentId, setEditingAppointmentId] = useState<string | null>(null);
   const [showSummary, setShowSummary] = useState<string | null>(null);
   const [showInvite, setShowInvite] = useState(false);
   const [caregiverSearch, setCaregiverSearch] = useState('');
@@ -50,6 +51,7 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
   const [circleActionError, setCircleActionError] = useState<string | null>(null);
   const emergencyFeedback = useFormFeedback();
   const healthNoteFeedback = useFormFeedback();
+  const appointmentFeedback = useFormFeedback();
   const [emergencyFieldsCleared, setEmergencyFieldsCleared] = useState(false);
   const emergencyContactUnchanged = emergencyFieldsCleared
     || (emergencyName === emergencyContact.name && emergencyPhone === emergencyContact.phone);
@@ -58,7 +60,8 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
   const completedDoses = doses.filter((dose) => dose.status === 'taken' || dose.status === 'taken_late');
   const pendingDoses = doses.filter((dose) => dose.status === 'scheduled' || dose.status === 'due');
   const upcomingAppts = appointments.filter(
-    (a) => new Date(a.date + 'T00:00:00') >= new Date('2026-09-12T00:00:00')
+    (appointment) => appointment.status !== 'cancelled'
+      && new Date(`${appointment.date}T${appointment.time}`).getTime() >= Date.now()
   );
   const filteredCaregivers = caregivers.filter((c) =>
     c.name.toLowerCase().includes(caregiverSearch.toLowerCase()) ||
@@ -100,6 +103,11 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
     if (saved) {
       setHealthNote('');
     }
+  };
+
+  const handleCancelAppointment = async (id: string) => {
+    if (!window.confirm('Cancel this appointment?')) return;
+    await appointmentFeedback.run(() => cancelAppointment(id), 'Appointment cancelled');
   };
 
   return (
@@ -292,24 +300,30 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
         {activeTab === 'appointments' && (
           <div className="space-y-4 animate-fade-in">
             <div className="flex items-center justify-between">
-              <h3 className="font-display font-bold text-lg text-neutral-800">Upcoming Appointments</h3>
+              <h3 className="font-display font-bold text-lg text-neutral-800">Appointments</h3>
               <button
-                onClick={() => setShowAddAppt(true)}
+                onClick={() => { setEditingAppointmentId(null); setShowAddAppt(true); }}
                 className="btn-primary inline-flex items-center gap-1.5 text-sm"
               >
                 <Plus className="w-4 h-4" />
                 Add Appointment
               </button>
             </div>
-            <div className="space-y-3">
-              {upcomingAppts.map((appt) => (
+            {appointmentError && <p role="alert" className="text-sm text-danger-600">Appointments are unavailable: {appointmentError}</p>}
+            <FormFeedbackMessage success={appointmentFeedback.success} error={appointmentFeedback.error} />
+            {appointments.length === 0 ? (
+              <div className="card p-6 text-center text-sm text-neutral-400">No appointments have been added yet.</div>
+            ) : <div className="space-y-3">
+              {appointments.map((appt) => (
                 <AppointmentCard
                   key={appt.id}
                   appointment={appt}
                   onAddSummary={(id) => setShowSummary(id)}
+                  onEdit={(id) => { setEditingAppointmentId(id); setShowAddAppt(true); }}
+                  onCancel={(id) => void handleCancelAppointment(id)}
                 />
               ))}
-            </div>
+            </div>}
           </div>
         )}
 
@@ -595,7 +609,12 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
           onClose={() => setShowAddMed(false)}
         />
       )}
-      {showAddAppt && <AddAppointmentModal onClose={() => setShowAddAppt(false)} />}
+      {showAddAppt && (
+        <AddAppointmentModal
+          appointment={appointments.find((appointment) => appointment.id === editingAppointmentId)}
+          onClose={() => { setShowAddAppt(false); setEditingAppointmentId(null); }}
+        />
+      )}
       {showSummary && (
         <SummaryModal
           appointmentId={showSummary}
