@@ -43,13 +43,12 @@ export default function CaregiverDashboard({ onBack }: CaregiverDashboardProps) 
   return (
     <div className="min-h-screen bg-primary-50 dark:bg-bg-dark">
       <DashboardHeader
-        role="caregiver"
         title={`${primaryCaregiver.name} · Caregiver`}
         subtitle={`Caring for ${elderlyPerson.name} in ${elderlyPerson.location}`}
         onBack={onBack}
       />
 
-      <div className="lg:ml-64 max-w-7xl mx-auto px-6 md:px-12 pt-6">
+      <div className="max-w-7xl mx-auto px-6 md:px-12 pt-6">
         <BridgeyHero
           eyebrow="Your care shift"
           message={activeSOS ? 'An alert needs your attention right now.' : `You have ${pendingTasks.length} task${pendingTasks.length === 1 ? '' : 's'} today.`}
@@ -57,7 +56,7 @@ export default function CaregiverDashboard({ onBack }: CaregiverDashboardProps) 
         />
       </div>
 
-      <div className="lg:ml-64 max-w-7xl mx-auto px-6 md:px-12 py-6">
+      <div className="max-w-7xl mx-auto px-6 md:px-12 py-6">
         {/* SOS Banner */}
         {activeSOS && (
           <div className="mb-6">
@@ -271,7 +270,7 @@ export default function CaregiverDashboard({ onBack }: CaregiverDashboardProps) 
         )}
       </div>
 
-      <div className="lg:ml-64 max-w-7xl mx-auto px-6 md:px-12 pb-6">
+      <div className="max-w-7xl mx-auto px-6 md:px-12 pb-6">
         <SharedTimeline events={timelineEvents} />
       </div>
 

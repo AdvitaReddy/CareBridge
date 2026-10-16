@@ -2,12 +2,15 @@ import { useEffect, useState } from 'react';
 import { AppProvider, useApp } from '@/context/AppContext';
 import Landing from '@/pages/Landing';
 import Login from '@/pages/Login';
+import SignUp from '@/pages/SignUp';
 import ElderlyDashboard from '@/pages/ElderlyDashboard';
 import FamilyDashboard from '@/pages/FamilyDashboard';
 import CaregiverDashboard from '@/pages/CaregiverDashboard';
 import AdminDashboard from '@/pages/AdminDashboard';
 import BridgeyCelebration from '@/components/BridgeyCelebration';
 import SOSResolutionNotice from '@/components/SOSResolutionNotice';
+import PendingInvitationCard from '@/components/PendingInvitationCard';
+import FormToastHost from '@/components/FormToastHost';
 
 function AppContent() {
   const { profile, authLoading, signOut, setBridgeySection } = useApp();
@@ -40,6 +43,11 @@ function AppContent() {
       return;
     }
 
+    if (pathname === '/signup') {
+      if (profile) navigate(`/dashboard/${profile.role}`);
+      return;
+    }
+
     if (pathname === '/') {
       if (profile) navigate(`/dashboard/${profile.role}`);
       return;
@@ -59,7 +67,9 @@ function AppContent() {
   if (pathname === '/' && !profile) {
     page = <Landing onEnter={() => navigate('/login')} />;
   } else if (pathname === '/login' && !profile) {
-    page = <Login onBack={() => navigate('/')} />;
+    page = <Login onBack={() => navigate('/')} onSignUp={() => navigate('/signup')} />;
+  } else if (pathname === '/signup' && !profile) {
+    page = <SignUp onBack={() => navigate('/login')} onLogin={() => navigate('/login')} />;
   } else if (canShowDashboard) {
     const handleLogout = async () => {
       try {
@@ -86,6 +96,8 @@ function AppContent() {
       {page}
       <BridgeyCelebration />
       <SOSResolutionNotice />
+      <PendingInvitationCard />
+      <FormToastHost />
     </>
   );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Clock, Calendar, Pill, AlertTriangle, Users, Heart, Plus, Search,
-  Star, MapPin, CheckCircle2, UserPlus, FileText, Pencil, Activity,
+  Star, MapPin, CheckCircle2, UserPlus, FileText, Pencil, Activity, Trash2, Phone,
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { familyMember, elderlyPerson, formatClockTime, formatDateTime } from '@/data/mockData';
@@ -14,6 +14,8 @@ import AddMedicineModal from '@/components/AddMedicineModal';
 import AddAppointmentModal from '@/components/AddAppointmentModal';
 import SummaryModal from '@/components/SummaryModal';
 import InviteModal from '@/components/InviteModal';
+import useFormFeedback from '@/hooks/useFormFeedback';
+import FormFeedbackMessage from '@/components/FormFeedbackMessage';
 import BridgeyHero from '@/components/BridgeyHero';
 
 type Tab = 'timeline' | 'medicines' | 'appointments' | 'caregivers' | 'sos';
@@ -27,6 +29,8 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
     medicines, doses, appointments, sosEvents, caregivers, careCircle,
     requestCaregiver, activeSOS, setBridgeySection,
     profile, timelineEvents, careLoading, careError, addCareTimelineEvent,
+    circleInvitations, cancelCircleInvitation, removeCircleMember,
+    emergencyContact, updateEmergencyContact,
   } = useApp();
   const familyMemberName = familyMember.name;
   const elderlyName = elderlyPerson.name;
@@ -40,6 +44,14 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
   const [showInvite, setShowInvite] = useState(false);
   const [caregiverSearch, setCaregiverSearch] = useState('');
   const [healthNote, setHealthNote] = useState('');
+  const [emergencyName, setEmergencyName] = useState('');
+  const [emergencyPhone, setEmergencyPhone] = useState('');
+  const [circleActionError, setCircleActionError] = useState<string | null>(null);
+  const emergencyFeedback = useFormFeedback();
+  const healthNoteFeedback = useFormFeedback();
+  const [emergencyFieldsCleared, setEmergencyFieldsCleared] = useState(false);
+  const emergencyContactUnchanged = emergencyFieldsCleared
+    || (emergencyName === emergencyContact.name && emergencyPhone === emergencyContact.phone);
 
   const missedDoses = doses.filter((dose) => dose.status === 'missed');
   const completedDoses = doses.filter((dose) => dose.status === 'taken' || dose.status === 'taken_late');
@@ -52,6 +64,7 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
     c.specialty.toLowerCase().includes(caregiverSearch.toLowerCase()) ||
     c.location.toLowerCase().includes(caregiverSearch.toLowerCase())
   );
+
   const familyHeroMessage = activeSOS
     ? 'An SOS needs attention right now. Your care circle has been alerted.'
     : missedDoses.length > 0
@@ -62,7 +75,7 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
     { id: 'timeline', label: 'Timeline', icon: Clock },
     { id: 'medicines', label: 'Medicines', icon: Pill },
     { id: 'appointments', label: 'Appointments', icon: Calendar },
-    { id: 'caregivers', label: 'Caregivers', icon: Users },
+    { id: 'caregivers', label: 'Care Circle', icon: Users },
     { id: 'sos', label: 'SOS History', icon: AlertTriangle },
   ];
 
@@ -78,24 +91,24 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
 
   const handleAddNote = async () => {
     if (!healthNote.trim()) return;
-    try {
-      await addCareTimelineEvent('note', healthNote.trim());
+    const saved = await healthNoteFeedback.run(
+      () => addCareTimelineEvent('note', healthNote.trim()),
+      'Added'
+    );
+    if (saved) {
       setHealthNote('');
-    } catch (error) {
-      console.error('Unable to add health note:', error);
     }
   };
 
   return (
     <div className="min-h-screen bg-primary-50 dark:bg-bg-dark">
       <DashboardHeader
-        role="family"
         title={`${profile?.full_name ?? familyMemberName} · Family Dashboard`}
         subtitle={`Monitoring ${elderlyName} in ${elderlyLocation}`}
         onBack={onBack}
       />
 
-      <div className="lg:ml-64 max-w-7xl mx-auto px-6 md:px-12 pt-6">
+      <div className="max-w-7xl mx-auto px-6 md:px-12 pt-6">
         <BridgeyHero
           eyebrow="Care circle update"
           message={familyHeroMessage}
@@ -103,7 +116,7 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
         />
       </div>
 
-      <div className="lg:ml-64 max-w-7xl mx-auto px-6 md:px-12 py-6">
+      <div className="max-w-7xl mx-auto px-6 md:px-12 py-6">
         {/* SOS Banner */}
         {activeSOS && (
           <div className="mb-6">
@@ -173,17 +186,25 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
                 <input
                   type="text"
                   value={healthNote}
-                  onChange={(e) => setHealthNote(e.target.value)}
+                  onChange={(e) => { healthNoteFeedback.clear(); setHealthNote(e.target.value); }}
                   placeholder="e.g. BP reading 130/85, feeling better today..."
                   className="flex-1 px-3 py-2.5 rounded-xl border border-neutral-200 focus:border-primary-400 focus:ring-2 focus:ring-primary-100 outline-none transition-all text-sm"
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddNote()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void handleAddNote();
+                    }
+                  }}
                 />
                 <button
-                  onClick={handleAddNote}
+                  type="button"
+                  onClick={() => void handleAddNote()}
+                  disabled={healthNoteFeedback.isSaving || !healthNote.trim()}
                   className="px-4 py-2.5 rounded-xl bg-accent-500 text-white font-semibold text-sm hover:bg-accent-600 transition-colors"
                 >
-                  Add
+                  {healthNoteFeedback.isSaving ? 'Saving...' : 'Add'}
                 </button>
+                <FormFeedbackMessage success={healthNoteFeedback.success} error={healthNoteFeedback.error} />
               </div>
             </div>
 
@@ -303,7 +324,7 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
                   className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-accent-500 text-white font-semibold text-sm hover:bg-accent-600 transition-colors"
                 >
                   <UserPlus className="w-4 h-4" />
-                  Invite Family
+                  Invite Member
                 </button>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -316,14 +337,113 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-sm text-neutral-800">{member.name}</p>
-                      <p className="text-xs text-neutral-500">{member.role} · {member.location}</p>
+                      <p className="text-xs text-neutral-500">{member.role}</p>
                     </div>
                     <span className={`badge ${member.type === 'family' ? 'bg-primary-100 text-primary-700' : 'bg-secondary-100 text-secondary-700'}`}>
-                      {member.type === 'family' ? 'Family' : 'Caregiver'}
+                      {member.role}
                     </span>
+                    {member.id !== profile?.id && member.type !== 'elderly' && member.type !== 'admin' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCircleActionError(null);
+                          void removeCircleMember(member.id).catch((error: unknown) => {
+                            setCircleActionError(error instanceof Error ? error.message : 'Unable to remove member.');
+                          });
+                        }}
+                        className="p-2 rounded-lg text-danger-600 hover:bg-danger-50"
+                        aria-label={`Remove ${member.name} from the care circle`}
+                        title="Remove member"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
+              {circleActionError && <p role="alert" className="mt-3 text-sm text-danger-600">{circleActionError}</p>}
+
+              <div className="card p-4 mt-4">
+                <h4 className="font-semibold text-sm text-neutral-800 mb-3 flex items-center gap-2">
+                  <Phone className="w-4 h-4 text-danger-500" /> Emergency Contact
+                </h4>
+                <form
+                  className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3"
+                  onSubmit={async (event) => {
+                    event.preventDefault();
+                    setCircleActionError(null);
+                    const saved = await emergencyFeedback.run(
+                      () => updateEmergencyContact(emergencyName.trim(), emergencyPhone.trim()),
+                      'Saved'
+                    );
+                    if (saved) {
+                      setEmergencyFieldsCleared(true);
+                      setEmergencyName('');
+                      setEmergencyPhone('');
+                    }
+                  }}
+                >
+                  <input
+                    value={emergencyName}
+                    onChange={(event) => {
+                      setEmergencyFieldsCleared(false);
+                      emergencyFeedback.clear();
+                      setEmergencyName(event.target.value);
+                    }}
+                    placeholder="Contact name"
+                    aria-label="Emergency contact name"
+                    className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 focus:border-primary-400 focus:ring-2 focus:ring-primary-100 outline-none"
+                  />
+                  <input
+                    type="tel"
+                    value={emergencyPhone}
+                    onChange={(event) => {
+                      setEmergencyFieldsCleared(false);
+                      emergencyFeedback.clear();
+                      setEmergencyPhone(event.target.value);
+                    }}
+                    placeholder="Phone number"
+                    aria-label="Emergency contact phone"
+                    className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 focus:border-primary-400 focus:ring-2 focus:ring-primary-100 outline-none"
+                  />
+                  <div className="flex flex-wrap items-center gap-2 sm:col-span-3">
+                  <button type="submit" disabled={emergencyFeedback.isSaving || emergencyContactUnchanged} className="btn-primary disabled:opacity-60">
+                    {emergencyFeedback.isSaving ? 'Saving...' : 'Save'}
+                  </button>
+                  <FormFeedbackMessage success={emergencyFeedback.success} error={emergencyFeedback.error} noChanges={emergencyContactUnchanged} />
+                  </div>
+                </form>
+              </div>
+
+              {circleInvitations.some((invitation) => invitation.care_circle_id === profile?.care_circle_id) && (
+                <div className="card p-4 mt-4">
+                  <h4 className="font-semibold text-sm text-neutral-800 mb-3">Pending Invitations</h4>
+                  <div className="space-y-2">
+                    {circleInvitations
+                      .filter((invitation) => invitation.care_circle_id === profile?.care_circle_id)
+                      .map((invitation) => (
+                        <div key={invitation.id} className="flex items-center gap-3 rounded-xl bg-neutral-50 p-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-neutral-800">{invitation.email}</p>
+                            <p className="text-xs text-neutral-500">{invitation.role} · pending</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCircleActionError(null);
+                              void cancelCircleInvitation(invitation.id).catch((error: unknown) => {
+                                setCircleActionError(error instanceof Error ? error.message : 'Unable to cancel invitation.');
+                              });
+                            }}
+                            className="px-3 py-2 rounded-lg border border-neutral-300 text-neutral-700 text-sm font-semibold hover:bg-neutral-100"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Caregiver Directory */}

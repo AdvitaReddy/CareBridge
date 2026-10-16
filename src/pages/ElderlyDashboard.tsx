@@ -48,7 +48,6 @@ export default function ElderlyDashboard({ onBack }: ElderlyDashboardProps) {
   return (
     <div className="min-h-screen bg-primary-50 dark:bg-bg-dark text-lg font-body">
       <DashboardHeader
-        role="elderly"
         title={`Hello, ${profile?.full_name ?? elderlyPerson.name}`}
         subtitle={`${elderlyPerson.location} · Age ${elderlyPerson.age}`}
         onBack={onBack}

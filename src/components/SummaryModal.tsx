@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
+import useFormFeedback from '@/hooks/useFormFeedback';
+import FormFeedbackMessage from '@/components/FormFeedbackMessage';
 
 interface SummaryModalProps {
   appointmentId: string;
@@ -11,12 +13,13 @@ interface SummaryModalProps {
 export default function SummaryModal({ appointmentId, doctorName, onClose }: SummaryModalProps) {
   const { addAppointmentSummary } = useApp();
   const [summary, setSummary] = useState('');
+  const { isSaving, success, error, clear, run } = useFormFeedback();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!summary.trim()) return;
-    addAppointmentSummary(appointmentId, summary.trim());
-    onClose();
+    const saved = await run(() => addAppointmentSummary(appointmentId, summary.trim()), 'Saved');
+    if (saved) setSummary('');
   };
 
   return (
@@ -34,13 +37,13 @@ export default function SummaryModal({ appointmentId, doctorName, onClose }: Sum
         <form onSubmit={handleSubmit}>
           <textarea
             value={summary}
-            onChange={(e) => setSummary(e.target.value)}
+            onChange={(e) => { clear(); setSummary(e.target.value); }}
             placeholder="Enter notes from the doctor visit..."
             rows={5}
             className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 focus:border-primary-400 focus:ring-2 focus:ring-primary-100 outline-none transition-all resize-none"
             autoFocus
           />
-          <div className="flex gap-3 pt-4">
+          <div className="flex flex-wrap items-center gap-3 pt-4">
             <button
               type="button"
               onClick={onClose}
@@ -50,10 +53,12 @@ export default function SummaryModal({ appointmentId, doctorName, onClose }: Sum
             </button>
             <button
               type="submit"
-              className="flex-1 btn-primary px-4 py-2.5"
+              disabled={isSaving}
+              className="flex-1 btn-primary px-4 py-2.5 disabled:opacity-60"
             >
-              Save Summary
+              {isSaving ? 'Saving...' : 'Save Summary'}
             </button>
+            <FormFeedbackMessage success={success} error={error} />
           </div>
         </form>
       </div>

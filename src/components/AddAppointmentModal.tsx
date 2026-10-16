@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
+import useFormFeedback from '@/hooks/useFormFeedback';
+import FormFeedbackMessage from '@/components/FormFeedbackMessage';
 
 interface AddAppointmentModalProps {
   onClose: () => void;
@@ -14,19 +16,26 @@ export default function AddAppointmentModal({ onClose }: AddAppointmentModalProp
   const [time, setTime] = useState('');
   const [location, setLocation] = useState('');
   const [notes, setNotes] = useState('');
+  const { isSaving, success, error, clear, run } = useFormFeedback();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!doctorName.trim() || !date || !time) return;
-    addAppointment({
+    const saved = await run(() => addAppointment({
       doctorName: doctorName.trim(),
       specialty: specialty.trim() || 'General',
       date,
       time,
       location: location.trim(),
       notes: notes.trim(),
-    });
-    onClose();
+    }), 'Added');
+    if (!saved) return;
+    setDoctorName('');
+    setSpecialty('');
+    setDate('');
+    setTime('');
+    setLocation('');
+    setNotes('');
   };
 
   return (
@@ -44,7 +53,7 @@ export default function AddAppointmentModal({ onClose }: AddAppointmentModalProp
             <input
               type="text"
               value={doctorName}
-              onChange={(e) => setDoctorName(e.target.value)}
+              onChange={(e) => { clear(); setDoctorName(e.target.value); }}
               placeholder="e.g. Dr. Suresh Reddy"
               className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 focus:border-primary-400 focus:ring-2 focus:ring-primary-100 outline-none transition-all"
               required
@@ -55,7 +64,7 @@ export default function AddAppointmentModal({ onClose }: AddAppointmentModalProp
             <input
               type="text"
               value={specialty}
-              onChange={(e) => setSpecialty(e.target.value)}
+              onChange={(e) => { clear(); setSpecialty(e.target.value); }}
               placeholder="e.g. Cardiology"
               className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 focus:border-primary-400 focus:ring-2 focus:ring-primary-100 outline-none transition-all"
             />
@@ -66,7 +75,7 @@ export default function AddAppointmentModal({ onClose }: AddAppointmentModalProp
               <input
                 type="date"
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
+                onChange={(e) => { clear(); setDate(e.target.value); }}
                 className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 focus:border-primary-400 focus:ring-2 focus:ring-primary-100 outline-none transition-all"
                 required
               />
@@ -76,7 +85,7 @@ export default function AddAppointmentModal({ onClose }: AddAppointmentModalProp
               <input
                 type="time"
                 value={time}
-                onChange={(e) => setTime(e.target.value)}
+                onChange={(e) => { clear(); setTime(e.target.value); }}
                 className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 focus:border-primary-400 focus:ring-2 focus:ring-primary-100 outline-none transition-all"
                 required
               />
@@ -87,7 +96,7 @@ export default function AddAppointmentModal({ onClose }: AddAppointmentModalProp
             <input
               type="text"
               value={location}
-              onChange={(e) => setLocation(e.target.value)}
+              onChange={(e) => { clear(); setLocation(e.target.value); }}
               placeholder="e.g. Care Hospital, Vijayawada"
               className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 focus:border-primary-400 focus:ring-2 focus:ring-primary-100 outline-none transition-all"
             />
@@ -96,13 +105,13 @@ export default function AddAppointmentModal({ onClose }: AddAppointmentModalProp
             <label className="block text-sm font-medium text-neutral-700 mb-1">Notes</label>
             <textarea
               value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+              onChange={(e) => { clear(); setNotes(e.target.value); }}
               placeholder="Any special instructions..."
               rows={2}
               className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 focus:border-primary-400 focus:ring-2 focus:ring-primary-100 outline-none transition-all resize-none"
             />
           </div>
-          <div className="flex gap-3 pt-2">
+          <div className="flex flex-wrap items-center gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
@@ -112,10 +121,12 @@ export default function AddAppointmentModal({ onClose }: AddAppointmentModalProp
             </button>
             <button
               type="submit"
-              className="flex-1 btn-primary px-4 py-2.5"
+              disabled={isSaving}
+              className="flex-1 btn-primary px-4 py-2.5 disabled:opacity-60"
             >
-              Add Appointment
+              {isSaving ? 'Saving...' : 'Add Appointment'}
             </button>
+            <FormFeedbackMessage success={success} error={error} />
           </div>
         </form>
       </div>

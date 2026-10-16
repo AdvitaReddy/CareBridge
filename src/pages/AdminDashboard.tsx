@@ -84,13 +84,12 @@ export default function AdminDashboard({ onBack }: AdminDashboardProps) {
   return (
     <div className="min-h-screen bg-primary-50 dark:bg-bg-dark">
       <DashboardHeader
-        role="admin"
         title="Admin Panel"
         subtitle="Platform management & oversight"
         onBack={onBack}
       />
 
-      <div className="lg:ml-64 max-w-7xl mx-auto px-6 md:px-12 pt-6">
+      <div className="max-w-7xl mx-auto px-6 md:px-12 pt-6">
         <BridgeyHero
           eyebrow="Platform pulse"
           message={pendingCaregivers.length > 0 ? `${pendingCaregivers.length} caregiver${pendingCaregivers.length === 1 ? '' : 's'} waiting for verification.` : 'Everything is up to date on the platform.'}
@@ -98,7 +97,7 @@ export default function AdminDashboard({ onBack }: AdminDashboardProps) {
         />
       </div>
 
-      <div className="lg:ml-64 max-w-7xl mx-auto px-6 md:px-12 py-6">
+      <div className="max-w-7xl mx-auto px-6 md:px-12 py-6">
         <div className="mb-6"><SOSBanner /></div>
         {/* Tabs */}
         <div className="flex gap-1 sm:gap-2 overflow-x-auto border-b border-neutral-200 mb-6">

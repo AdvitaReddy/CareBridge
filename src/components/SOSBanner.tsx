@@ -13,7 +13,7 @@ function formatElapsed(startedAt: string, now: number) {
 }
 
 export default function SOSBanner() {
-  const { activeSOS, profile, acknowledgeSOS, resolveSOS } = useApp();
+  const { activeSOS, profile, emergencyContact, acknowledgeSOS, resolveSOS } = useApp();
   const [now, setNow] = useState(Date.now());
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +33,8 @@ export default function SOSBanner() {
     && (activeSOS.status === 'active' || isEscalated);
   const canResolve = profile?.role === 'admin' || (isAcknowledged && profile?.id === activeSOS.acknowledgedBy);
   const hasLocation = activeSOS.latitude !== null && activeSOS.longitude !== null;
+  const emergencyPhone = emergencyContact.phone || familyMember.phone;
+  const emergencyName = emergencyContact.name || 'Emergency contact';
   const mapUrl = hasLocation
     ? `https://www.google.com/maps?q=${activeSOS.latitude},${activeSOS.longitude}`
     : null;
@@ -75,8 +77,8 @@ export default function SOSBanner() {
             <p className="font-bold">No response, escalated</p>
             <p className="mt-1 text-sm">Call the emergency contact or 112 now.</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <a href={`tel:${familyMember.phone.replace(/\s/g, '')}`} className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-bold text-danger-700">
-                <Phone className="h-4 w-4" /> Emergency contact · {familyMember.phone}
+              <a href={`tel:${emergencyPhone.replace(/\s/g, '')}`} className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-bold text-danger-700">
+                <Phone className="h-4 w-4" /> {emergencyName} · {emergencyPhone}
               </a>
               <a href="tel:112" className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-bold text-danger-700">
                 <Phone className="h-4 w-4" /> Call 112

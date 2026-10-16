@@ -2,6 +2,8 @@ import { useState, type FormEvent } from 'react';
 import { X } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import type { Medicine } from '@/data/mockData';
+import useFormFeedback from '@/hooks/useFormFeedback';
+import FormFeedbackMessage from '@/components/FormFeedbackMessage';
 
 interface AddMedicineModalProps {
   onClose: () => void;
@@ -13,23 +15,43 @@ export default function AddMedicineModal({ onClose, medicine }: AddMedicineModal
   const [name, setName] = useState(medicine?.name ?? '');
   const [dosage, setDosage] = useState(medicine?.dosage ?? '');
   const [times, setTimes] = useState(medicine?.times.join(', ') ?? '08:00');
-  const [error, setError] = useState<string | null>(null);
+  const [savedValues, setSavedValues] = useState({
+    name: medicine?.name ?? '',
+    dosage: medicine?.dosage ?? '',
+    times: medicine?.times.join(', ') ?? '08:00',
+  });
+  const [fieldsClearedAfterSave, setFieldsClearedAfterSave] = useState(false);
+  const { isSaving, success, error, clear, run } = useFormFeedback();
+  const unchanged = Boolean(medicine) && (
+    fieldsClearedAfterSave
+    || (name === savedValues.name && dosage === savedValues.dosage && times === savedValues.times)
+  );
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !dosage.trim()) return;
+    if (!name.trim() || !dosage.trim() || (medicine && unchanged)) return;
     const schedule = times.split(',').map((time) => time.trim()).filter(Boolean);
     if (schedule.length === 0) {
-      setError('Add at least one dose time.');
+      clear();
+      await run(() => { throw new Error('Add at least one dose time.'); });
       return;
     }
-    try {
-      const values = { name: name.trim(), dosage: dosage.trim(), times: schedule };
+    const values = { name: name.trim(), dosage: dosage.trim(), times: schedule };
+    const saved = await run(async () => {
       if (medicine) await updateMedicine(medicine.id, values);
       else await addMedicine(values);
-      onClose();
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Unable to save this medicine.');
+    }, medicine ? 'Saved' : 'Added');
+    if (saved && !medicine) {
+      setName('');
+      setDosage('');
+      setTimes('');
+    } else if (saved) {
+      const normalizedTimes = schedule.join(', ');
+      setSavedValues({ name: values.name, dosage: values.dosage, times: normalizedTimes });
+      setName('');
+      setDosage('');
+      setTimes('');
+      setFieldsClearedAfterSave(true);
     }
   };
 
@@ -48,7 +70,7 @@ export default function AddMedicineModal({ onClose, medicine }: AddMedicineModal
             <input
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => { clear(); setFieldsClearedAfterSave(false); setName(e.target.value); }}
               placeholder="e.g. Metformin"
               className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 focus:border-primary-400 focus:ring-2 focus:ring-primary-100 outline-none transition-all"
               required
@@ -59,7 +81,7 @@ export default function AddMedicineModal({ onClose, medicine }: AddMedicineModal
             <input
               type="text"
               value={dosage}
-              onChange={(e) => setDosage(e.target.value)}
+              onChange={(e) => { clear(); setFieldsClearedAfterSave(false); setDosage(e.target.value); }}
               placeholder="e.g. 500mg"
               className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 focus:border-primary-400 focus:ring-2 focus:ring-primary-100 outline-none transition-all"
               required
@@ -70,13 +92,12 @@ export default function AddMedicineModal({ onClose, medicine }: AddMedicineModal
             <input
               type="text"
               value={times}
-              onChange={(e) => setTimes(e.target.value)}
+              onChange={(e) => { clear(); setFieldsClearedAfterSave(false); setTimes(e.target.value); }}
               placeholder="08:00, 20:00"
               className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 focus:border-primary-400 focus:ring-2 focus:ring-primary-100 outline-none transition-all"
             />
           </div>
-          {error && <p role="alert" className="text-sm text-danger-600">{error}</p>}
-          <div className="flex gap-3 pt-2">
+          <div className="flex flex-wrap items-center gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
@@ -86,10 +107,12 @@ export default function AddMedicineModal({ onClose, medicine }: AddMedicineModal
             </button>
             <button
               type="submit"
-              className="flex-1 btn-primary px-4 py-2.5"
+              disabled={isSaving || unchanged}
+              className="flex-1 btn-primary px-4 py-2.5 disabled:opacity-60"
             >
-              {medicine ? 'Save Changes' : 'Add Medicine'}
+              {isSaving ? 'Saving...' : medicine ? 'Save Changes' : 'Add Medicine'}
             </button>
+            <FormFeedbackMessage success={success} error={error} noChanges={unchanged} />
           </div>
         </form>
       </div>
