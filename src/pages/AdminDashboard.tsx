@@ -1,28 +1,30 @@
 import { useState } from 'react';
 import {
   Users, ShieldCheck, BarChart3, CheckCircle2, XCircle,
-  User, AlertTriangle, Pill, Calendar, Heart, TrendingUp,
+  User, AlertTriangle, Pill, Calendar, Heart, TrendingUp, ClipboardList, ScrollText,
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
-import { formatDate } from '@/data/mockData';
+import { formatDate, formatDateTime } from '@/data/mockData';
 import DashboardHeader from '@/components/DashboardHeader';
 import Disclaimer from '@/components/Disclaimer';
 import BridgeyHero from '@/components/BridgeyHero';
 import SharedTimeline from '@/components/SharedTimeline';
 import SOSBanner from '@/components/SOSBanner';
+import CareTaskManager from '@/components/CareTaskManager';
 
 interface AdminDashboardProps {
   onBack: () => void;
 }
 
-type Tab = 'users' | 'verification' | 'stats';
+type Tab = 'users' | 'verification' | 'stats' | 'tasks' | 'audit';
 
 export default function AdminDashboard({ onBack }: AdminDashboardProps) {
   const {
-    adminUsers, approveUser, rejectUser,
+    profile, adminUsers, approveUser, rejectUser,
     caregivers, approveCaregiver, rejectCaregiver,
     medicines, appointments, sosEvents, careCircle,
     runDemoAction, runDemoSOSAction, timelineEvents,
+    auditLogs, auditLogError, refreshAuditLogs,
   } = useApp();
   const [activeTab, setActiveTab] = useState<Tab>('stats');
   const [demoAction, setDemoAction] = useState<string | null>(null);
@@ -68,6 +70,8 @@ export default function AdminDashboard({ onBack }: AdminDashboardProps) {
     { id: 'stats', label: 'Statistics', icon: BarChart3 },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'verification', label: 'Verification', icon: ShieldCheck },
+    { id: 'tasks', label: 'Tasks', icon: ClipboardList },
+    ...(profile?.role === 'admin' ? [{ id: 'audit' as const, label: 'Audit Logs', icon: ScrollText }] : []),
   ];
 
   const stats = [
@@ -205,6 +209,54 @@ export default function AdminDashboard({ onBack }: AdminDashboardProps) {
               {demoError && <p role="alert" className="text-sm text-danger-600 mt-3">{demoError}</p>}
             </section>
           </div>
+        )}
+
+        {activeTab === 'tasks' && <CareTaskManager />}
+
+        {activeTab === 'audit' && profile?.role === 'admin' && (
+          <section className="space-y-4 animate-fade-in" aria-labelledby="audit-logs-title">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 id="audit-logs-title" className="font-display font-bold text-lg text-neutral-800">Audit Logs</h2>
+              <button
+                type="button"
+                onClick={() => void refreshAuditLogs().catch((error: unknown) => console.error('Unable to refresh audit logs:', error))}
+                className="px-3 py-2 rounded-lg border border-neutral-200 bg-white text-sm font-semibold text-neutral-600 hover:bg-neutral-50"
+              >
+                Refresh
+              </button>
+            </div>
+            {auditLogError && <p role="alert" className="text-sm text-danger-600">{auditLogError}</p>}
+            <div className="card overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-neutral-200 bg-neutral-50">
+                      <th className="text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide px-4 py-3">Actor</th>
+                      <th className="text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide px-4 py-3">Action</th>
+                      <th className="text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide px-4 py-3">Target</th>
+                      <th className="text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide px-4 py-3">Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditLogs.map((entry) => (
+                      <tr key={entry.id} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50">
+                        <td className="px-4 py-3 text-sm font-medium text-neutral-800">{entry.actor_name}</td>
+                        <td className="px-4 py-3 text-sm text-neutral-600">{entry.action}</td>
+                        <td className="px-4 py-3 text-sm text-neutral-600 break-all">{entry.target}</td>
+                        <td className="px-4 py-3 text-sm text-neutral-500 whitespace-nowrap">
+                          <span>{formatDateTime(entry.created_at)}</span>
+                          {entry.is_demo && <span className="ml-2 badge bg-accent-100 text-accent-700">Demo</span>}
+                        </td>
+                      </tr>
+                    ))}
+                    {auditLogs.length === 0 && !auditLogError && (
+                      <tr><td colSpan={4} className="px-4 py-8 text-center text-sm text-neutral-400">No audit entries yet.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
         )}
 
         {/* Users Tab */}

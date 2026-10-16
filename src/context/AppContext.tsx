@@ -17,13 +17,11 @@ import {
   type TimelineEntry,
   type Caregiver,
   type CareCircleMember,
-  type CaregiverTask,
   type AdminUser,
   type Role,
   seedAppointments,
   seedTimeline,
   seedCaregivers,
-  seedCaregiverTasks,
   seedAdminUsers,
   formatClockTime,
 } from '@/data/mockData';
@@ -45,12 +43,18 @@ interface AppContextValue {
   doses: CareDose[];
   careLoading: boolean;
   careError: string | null;
+  taskError: string | null;
   refreshCareData: () => Promise<void>;
   confirmDose: (doseId: string) => Promise<void>;
   addMedicine: (med: Pick<Medicine, 'name' | 'dosage' | 'times'>) => Promise<void>;
   updateMedicine: (id: string, med: Pick<Medicine, 'name' | 'dosage' | 'times'>) => Promise<void>;
   notifications: CareNotification[];
   timelineEvents: CareTimelineEvent[];
+  tasks: CareTask[];
+  visitNotes: CareVisitNote[];
+  createTask: (task: Pick<CareTask, 'title' | 'description' | 'assigned_to' | 'due_at'>) => Promise<void>;
+  updateTaskStatus: (taskId: string, status: 'in_progress' | 'completed') => Promise<void>;
+  addVisitNote: (taskId: string, note: string) => Promise<void>;
   addCareTimelineEvent: (type: string, message: string) => Promise<void>;
   markNotificationRead: (notificationId: string) => Promise<void>;
   runDemoAction: (action: 'demo_make_next_dose_due' | 'demo_force_dose_missed' | 'reset_demo_data') => Promise<void>;
@@ -89,11 +93,10 @@ interface AppContextValue {
   removeCircleMember: (id: string) => Promise<void>;
   updateEmergencyContact: (name: string, phone: string) => Promise<void>;
 
-  // Caregiver Tasks
-  caregiverTasks: CaregiverTask[];
-  toggleTask: (id: string) => void;
-
   // Admin
+  auditLogs: AdminAuditLog[];
+  auditLogError: string | null;
+  refreshAuditLogs: () => Promise<void>;
   adminUsers: AdminUser[];
   approveUser: (id: string) => void;
   rejectUser: (id: string) => void;
@@ -140,6 +143,40 @@ export interface CareTimelineEvent {
   type: string;
   message: string;
   linked_id: string | null;
+  created_at: string;
+}
+
+export type CareTaskStatus = 'pending' | 'in_progress' | 'completed';
+
+export interface CareTask {
+  id: string;
+  care_circle_id: string;
+  title: string;
+  description: string | null;
+  assigned_to: string;
+  assigned_by: string;
+  due_at: string | null;
+  status: CareTaskStatus;
+  completed_at: string | null;
+  created_at: string;
+}
+
+export interface CareVisitNote {
+  id: string;
+  task_id: string;
+  care_circle_id: string;
+  author: string;
+  note: string;
+  created_at: string;
+}
+
+export interface AdminAuditLog {
+  id: string;
+  actor: string;
+  actor_name: string;
+  action: string;
+  target: string;
+  is_demo: boolean;
   created_at: string;
 }
 
@@ -201,6 +238,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [timelineEvents, setTimelineEvents] = useState<CareTimelineEvent[]>([]);
   const [careLoading, setCareLoading] = useState(false);
   const [careError, setCareError] = useState<string | null>(null);
+  const [taskError, setTaskError] = useState<string | null>(null);
+  const [tasks, setTasks] = useState<CareTask[]>([]);
+  const [visitNotes, setVisitNotes] = useState<CareVisitNote[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>(seedAppointments);
   const [sosEvents, setSosEvents] = useState<SOSEvent[]>([]);
   const [timeline, setTimeline] = useState<TimelineEntry[]>(seedTimeline);
@@ -208,7 +248,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [careCircle, setCareCircle] = useState<CareCircleMember[]>([]);
   const [circleInvitations, setCircleInvitations] = useState<CircleInvitation[]>([]);
   const [emergencyContact, setEmergencyContact] = useState<EmergencyContact>({ name: '', phone: '' });
-  const [caregiverTasks, setCaregiverTasks] = useState<CaregiverTask[]>(seedCaregiverTasks);
+  const [auditLogs, setAuditLogs] = useState<AdminAuditLog[]>([]);
+  const [auditLogError, setAuditLogError] = useState<string | null>(null);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>(seedAdminUsers);
   const sessionUserId = useRef<string | null>(null);
   const activeBridgeyEventKey = useRef<string | null>(null);
@@ -388,7 +429,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const end = new Date(start);
     end.setDate(end.getDate() + 1);
 
-    const [medicineResult, doseResult, notificationResult, timelineResult] = await Promise.all([
+    const [
+      medicineResult,
+      doseResult,
+      notificationResult,
+      timelineResult,
+      taskResult,
+      visitNoteResult,
+    ] = await Promise.all([
       supabase.from('medicines').select('id, name, dosage, times').order('created_at'),
       supabase
         .from('doses')
@@ -396,8 +444,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
         .gte('scheduled_at', start.toISOString())
         .lt('scheduled_at', end.toISOString())
         .order('scheduled_at'),
-      supabase.from('notifications').select('id, type, message, linked_id, read, created_at').order('created_at', { ascending: false }).limit(100),
+      supabase.from('notifications')
+        .select('id, type, message, linked_id, recipient_id, priority, read, created_at')
+        .or(`recipient_id.is.null,recipient_id.eq.${profile.id}`)
+        .order('created_at', { ascending: false })
+        .limit(100),
       supabase.from('timeline_events').select('id, type, message, linked_id, created_at').order('created_at', { ascending: false }).limit(100),
+      supabase.from('tasks')
+        .select('id, care_circle_id, title, description, assigned_to, assigned_by, due_at, status, completed_at, created_at')
+        .eq('care_circle_id', profile.care_circle_id)
+        .order('created_at', { ascending: false }),
+      supabase.from('visit_notes')
+        .select('id, task_id, care_circle_id, author, note, created_at')
+        .eq('care_circle_id', profile.care_circle_id)
+        .order('created_at', { ascending: false }),
     ]);
 
     const queryError = medicineResult.error ?? doseResult.error ?? notificationResult.error ?? timelineResult.error;
@@ -438,8 +498,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }));
     setNotifications((notificationResult.data ?? []) as CareNotification[]);
     setTimelineEvents((timelineResult.data ?? []) as CareTimelineEvent[]);
+    setTasks((taskResult.data ?? []) as CareTask[]);
+    setVisitNotes((visitNoteResult.data ?? []) as CareVisitNote[]);
+    const relatedTaskError = taskResult.error ?? visitNoteResult.error;
+    setTaskError(relatedTaskError?.message ?? null);
     setCareError(null);
-  }, [profile?.care_circle_id]);
+  }, [profile?.care_circle_id, profile?.id]);
+
+  const refreshAuditLogs = useCallback(async () => {
+    if (profile?.role !== 'admin') {
+      setAuditLogs([]);
+      setAuditLogError(null);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('audit_log')
+        .select('id, actor, action, target, is_demo, created_at')
+        .order('created_at', { ascending: false })
+        .limit(500);
+      if (error) throw error;
+
+      const rows = data ?? [];
+      const actorIds = [...new Set(rows.map((row) => row.actor))];
+      const { data: actors, error: actorsError } = actorIds.length
+        ? await supabase.from('profiles').select('id, full_name').in('id', actorIds)
+        : { data: [], error: null };
+      if (actorsError) throw actorsError;
+
+      const namesById = new Map((actors ?? []).map((actor) => [actor.id, actor.full_name]));
+      setAuditLogs(rows.map((row) => ({
+        ...row,
+        actor_name: namesById.get(row.actor) ?? 'Unknown user',
+      })) as AdminAuditLog[]);
+      setAuditLogError(null);
+    } catch (error) {
+      setAuditLogError(error instanceof Error ? error.message : 'Unable to load audit logs.');
+      throw error;
+    }
+  }, [profile?.role]);
 
   const refreshSOSData = useCallback(async () => {
     if (!profile?.id) return;
@@ -652,7 +750,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         void refresh();
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => void refresh())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => void refresh())
       .subscribe((status, error) => {
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           console.error(`SOS Realtime subscription ${status.toLowerCase()}:`, error);
@@ -673,6 +771,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setDoses([]);
       setNotifications([]);
       setTimelineEvents([]);
+      setTasks([]);
+      setVisitNotes([]);
+      setTaskError(null);
       setCareError(null);
       return;
     }
@@ -694,9 +795,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .channel(`care-data-${profile.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'doses' }, () => void load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'medicines' }, () => void load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => void load())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => void load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'timeline_events' }, () => void load())
-      .subscribe();
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => void load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'visit_notes' }, () => void load())
+      .subscribe((status, error) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error(`Care data Realtime subscription ${status.toLowerCase()}:`, error);
+        }
+      });
 
     return () => {
       active = false;
@@ -704,6 +811,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
       void supabase.removeChannel(channel);
     };
   }, [profile?.care_circle_id, profile?.id, refreshCareData]);
+
+  useEffect(() => {
+    if (profile?.role !== 'admin') {
+      setAuditLogs([]);
+      setAuditLogError(null);
+      return;
+    }
+
+    let active = true;
+    const load = async () => {
+      try {
+        await refreshAuditLogs();
+      } catch (error) {
+        if (active) console.error('Unable to refresh audit logs:', error);
+      }
+    };
+    void load();
+    const channel = supabase
+      .channel(`audit-log-${profile.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'audit_log' }, () => void load())
+      .subscribe((status, error) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error(`Audit log Realtime subscription ${status.toLowerCase()}:`, error);
+        }
+      });
+
+    return () => {
+      active = false;
+      void supabase.removeChannel(channel);
+    };
+  }, [profile?.id, profile?.role, refreshAuditLogs]);
 
   useEffect(() => {
     if (!profile) {
@@ -799,6 +937,56 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
     await refreshCareData();
   }, [profile?.care_circle_id, refreshCareData]);
+
+  const createTask = useCallback(async (
+    task: Pick<CareTask, 'title' | 'description' | 'assigned_to' | 'due_at'>,
+  ) => {
+    if (!profile?.care_circle_id || !profile.id) throw new Error('No care circle is linked to this account.');
+    const { error } = await supabase.from('tasks').insert({
+      care_circle_id: profile.care_circle_id,
+      title: task.title.trim(),
+      description: task.description?.trim() || null,
+      assigned_to: task.assigned_to,
+      assigned_by: profile.id,
+      due_at: task.due_at,
+    });
+    if (error) {
+      console.error('Unable to create task or its notification:', error);
+      throw error;
+    }
+    await refreshCareData();
+  }, [profile?.care_circle_id, profile?.id, refreshCareData]);
+
+  const updateTaskStatus = useCallback(async (taskId: string, status: 'in_progress' | 'completed') => {
+    const { error } = await supabase.from('tasks')
+      .update({ status })
+      .eq('id', taskId)
+      .select('id')
+      .single();
+    if (error) {
+      console.error(`Unable to update task status or create its notification (${status}):`, error);
+      throw error;
+    }
+    if (status === 'completed') emitBridgeyEvent('task-completed', taskId);
+    await refreshCareData();
+  }, [emitBridgeyEvent, refreshCareData]);
+
+  const addVisitNote = useCallback(async (taskId: string, note: string) => {
+    if (!profile?.care_circle_id || !profile.id) throw new Error('No care circle is linked to this account.');
+    const cleanNote = note.trim();
+    if (!cleanNote) throw new Error('Enter a visit note before saving.');
+    const { error } = await supabase.from('visit_notes').insert({
+      task_id: taskId,
+      care_circle_id: profile.care_circle_id,
+      author: profile.id,
+      note: cleanNote,
+    });
+    if (error) {
+      console.error('Unable to save visit note or create its notification:', error);
+      throw error;
+    }
+    await refreshCareData();
+  }, [profile?.care_circle_id, profile?.id, refreshCareData]);
 
   const runDemoAction = useCallback(async (action: 'demo_make_next_dose_due' | 'demo_force_dose_missed' | 'reset_demo_data') => {
     const { error } = await supabase.rpc(action);
@@ -927,14 +1115,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [caregivers, addTimelineEntry, emitBridgeyEvent]
   );
 
-  const toggleTask = useCallback((id: string) => {
-    const task = caregiverTasks.find((item) => item.id === id);
-    if (task && !task.done) emitBridgeyEvent('task-completed', id);
-    setCaregiverTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t))
-    );
-  }, [caregiverTasks, emitBridgeyEvent]);
-
   const approveUser = useCallback((id: string) => {
     setAdminUsers((prev) =>
       prev.map((u) => (u.id === id ? { ...u, status: 'active' as const } : u))
@@ -970,12 +1150,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     doses,
     careLoading,
     careError,
+    taskError,
     refreshCareData,
     confirmDose,
     addMedicine,
     updateMedicine,
     notifications,
     timelineEvents,
+    tasks,
+    visitNotes,
+    createTask,
+    updateTaskStatus,
+    addVisitNote,
     addCareTimelineEvent,
     markNotificationRead,
     runDemoAction,
@@ -1003,8 +1189,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     respondToCircleInvitation,
     removeCircleMember,
     updateEmergencyContact,
-    caregiverTasks,
-    toggleTask,
+    auditLogs,
+    auditLogError,
+    refreshAuditLogs,
     adminUsers,
     approveUser,
     rejectUser,

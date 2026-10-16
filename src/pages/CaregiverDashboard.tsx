@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  CheckSquare, Square, Clock, AlertTriangle, Calendar,
+  ClipboardList, Clock, AlertTriangle, Calendar,
   MapPin, Stethoscope, Pill, Check, User,
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
@@ -10,35 +10,32 @@ import SOSBanner from '@/components/SOSBanner';
 import Disclaimer from '@/components/Disclaimer';
 import BridgeyHero from '@/components/BridgeyHero';
 import SharedTimeline from '@/components/SharedTimeline';
+import AssignedCareTasks from '@/components/AssignedCareTasks';
 
 interface CaregiverDashboardProps {
   onBack: () => void;
 }
 
-type Tab = 'tasks' | 'schedule' | 'alerts';
+type Tab = 'today' | 'tasks' | 'schedule' | 'alerts';
 
 export default function CaregiverDashboard({ onBack }: CaregiverDashboardProps) {
-  const { caregiverTasks, toggleTask, appointments, activeSOS, sosEvents, medicines, timelineEvents } = useApp();
-  const [activeTab, setActiveTab] = useState<Tab>('tasks');
+  const { profile, tasks, appointments, activeSOS, sosEvents, medicines, timelineEvents } = useApp();
+  const [activeTab, setActiveTab] = useState<Tab>('today');
 
   const upcomingAppts = appointments.filter(
     (a) => new Date(a.date + 'T00:00:00') >= new Date('2026-09-12T00:00:00')
   );
-  const pendingTasks = caregiverTasks.filter((t) => !t.done);
-  const doneTasks = caregiverTasks.filter((t) => t.done);
+  const assignedTasks = tasks.filter((task) => task.assigned_to === profile?.id);
+  const pendingTasks = assignedTasks.filter((task) => task.status !== 'completed');
+  const doneTasks = assignedTasks.filter((task) => task.status === 'completed');
   const sosHistory = sosEvents.slice(0, 5);
 
   const tabs: { id: Tab; label: string; icon: typeof Clock }[] = [
-    { id: 'tasks', label: 'My Tasks', icon: CheckSquare },
+    { id: 'today', label: 'Today', icon: Calendar },
+    { id: 'tasks', label: 'Tasks', icon: ClipboardList },
     { id: 'schedule', label: "Today's Schedule", icon: Calendar },
     { id: 'alerts', label: 'Alerts', icon: AlertTriangle },
   ];
-
-  const priorityColors: Record<string, string> = {
-    high: 'bg-danger-100 text-danger-700',
-    medium: 'bg-warning-100 text-warning-700',
-    low: 'bg-neutral-100 text-neutral-600',
-  };
 
   return (
     <div className="min-h-screen bg-primary-50 dark:bg-bg-dark">
@@ -51,7 +48,7 @@ export default function CaregiverDashboard({ onBack }: CaregiverDashboardProps) 
       <div className="max-w-7xl mx-auto px-6 md:px-12 pt-6">
         <BridgeyHero
           eyebrow="Your care shift"
-          message={activeSOS ? 'An alert needs your attention right now.' : `You have ${pendingTasks.length} task${pendingTasks.length === 1 ? '' : 's'} today.`}
+          message={activeSOS ? 'An alert needs your attention right now.' : `You have ${pendingTasks.length} assigned task${pendingTasks.length === 1 ? '' : 's'} to review.`}
           expression={activeSOS ? 'concerned' : pendingTasks.length === 0 ? 'relieved' : 'happy'}
         />
       </div>
@@ -109,52 +106,17 @@ export default function CaregiverDashboard({ onBack }: CaregiverDashboardProps) 
           ))}
         </div>
 
-        {/* Tasks Tab */}
+        {activeTab === 'today' && (
+          <div className="space-y-4 animate-fade-in">
+            <h3 className="font-display font-bold text-lg text-neutral-800">Today’s Tasks</h3>
+            <AssignedCareTasks todayOnly />
+          </div>
+        )}
+
         {activeTab === 'tasks' && (
           <div className="space-y-4 animate-fade-in">
             <h3 className="font-display font-bold text-lg text-neutral-800">Assigned Tasks</h3>
-            <div className="space-y-3">
-              {caregiverTasks.map((task) => (
-                <div
-                  key={task.id}
-                  className={`card p-4 ${task.done ? 'opacity-60' : ''} transition-all`}
-                >
-                  <div className="flex items-start gap-3">
-                    <button
-                      onClick={() => toggleTask(task.id)}
-                      className="mt-0.5 flex-shrink-0"
-                    >
-                      {task.done ? (
-                        <CheckSquare className="w-6 h-6 text-success-500" />
-                      ) : (
-                        <Square className="w-6 h-6 text-neutral-300 hover:text-primary-400 transition-colors" />
-                      )}
-                    </button>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <h4 className={`font-semibold text-sm ${task.done ? 'line-through text-neutral-400' : 'text-neutral-800'}`}>
-                          {task.title}
-                        </h4>
-                        <span className={`badge ${priorityColors[task.priority]}`}>
-                          {task.priority}
-                        </span>
-                      </div>
-                      <p className="text-sm text-neutral-500 mt-1">{task.description}</p>
-                      <div className="flex items-center gap-2 mt-2">
-                        <Clock className="w-4 h-4 text-neutral-400" />
-                        <span className="text-xs text-neutral-500">{formatClockTime(task.time)}</span>
-                        {task.done && (
-                          <span className="text-xs text-success-600 font-medium flex items-center gap-1">
-                            <Check className="w-3.5 h-3.5" />
-                            Completed
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <AssignedCareTasks />
           </div>
         )}
 

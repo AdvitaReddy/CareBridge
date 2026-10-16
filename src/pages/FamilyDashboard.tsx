@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Clock, Calendar, Pill, AlertTriangle, Users, Heart, Plus, Search,
-  Star, MapPin, CheckCircle2, UserPlus, FileText, Pencil, Activity, Trash2, Phone,
+  Star, MapPin, CheckCircle2, UserPlus, FileText, Pencil, Activity, Trash2, Phone, ClipboardList,
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { familyMember, elderlyPerson, formatClockTime, formatDateTime } from '@/data/mockData';
@@ -17,8 +17,9 @@ import InviteModal from '@/components/InviteModal';
 import useFormFeedback from '@/hooks/useFormFeedback';
 import FormFeedbackMessage from '@/components/FormFeedbackMessage';
 import BridgeyHero from '@/components/BridgeyHero';
+import CareTaskManager from '@/components/CareTaskManager';
 
-type Tab = 'timeline' | 'medicines' | 'appointments' | 'caregivers' | 'sos';
+type Tab = 'timeline' | 'tasks' | 'medicines' | 'appointments' | 'caregivers' | 'sos';
 
 interface FamilyDashboardProps {
   onBack: () => void;
@@ -73,6 +74,7 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
 
   const tabs: { id: Tab; label: string; icon: typeof Clock }[] = [
     { id: 'timeline', label: 'Timeline', icon: Clock },
+    { id: 'tasks', label: 'Tasks', icon: ClipboardList },
     { id: 'medicines', label: 'Medicines', icon: Pill },
     { id: 'appointments', label: 'Appointments', icon: Calendar },
     { id: 'caregivers', label: 'Care Circle', icon: Users },
@@ -220,6 +222,8 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
             </div>
           </div>
         )}
+
+        {activeTab === 'tasks' && <CareTaskManager />}
 
         {/* Medicines Tab */}
         {activeTab === 'medicines' && (
