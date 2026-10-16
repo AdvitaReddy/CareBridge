@@ -107,7 +107,7 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
         {/* SOS Banner */}
         {activeSOS && (
           <div className="mb-6">
-            <SOSBanner canResolve />
+            <SOSBanner />
           </div>
         )}
 
@@ -408,13 +408,13 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
                 {sosEvents.map((event) => (
                   <div
                     key={event.id}
-                    className={`card p-4 ${event.status === 'active' ? 'border-danger-300 bg-danger-50/50' : ''}`}
+                    className={`card p-4 ${['active', 'acknowledged', 'escalated'].includes(event.status) ? 'border-danger-300 bg-danger-50/50' : ''}`}
                   >
                     <div className="flex items-start gap-3">
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                        event.status === 'active' ? 'bg-danger-100 text-danger-600' : 'bg-success-100 text-success-600'
+                        ['active', 'acknowledged', 'escalated'].includes(event.status) ? 'bg-danger-100 text-danger-600' : 'bg-success-100 text-success-600'
                       }`}>
-                        {event.status === 'active' ? (
+                        {['active', 'acknowledged', 'escalated'].includes(event.status) ? (
                           <AlertTriangle className="w-5 h-5" />
                         ) : (
                           <CheckCircle2 className="w-5 h-5" />
@@ -425,13 +425,18 @@ export default function FamilyDashboard({ onBack }: FamilyDashboardProps) {
                           <h4 className="font-semibold text-sm text-neutral-800">
                             SOS by {event.triggeredBy}
                           </h4>
-                          <span className={`badge ${event.status === 'active' ? 'bg-danger-100 text-danger-700' : 'bg-success-100 text-success-700'}`}>
-                            {event.status === 'active' ? 'Active' : 'Resolved'}
+                          <span className={`badge ${['active', 'acknowledged', 'escalated'].includes(event.status) ? 'bg-danger-100 text-danger-700' : 'bg-success-100 text-success-700'}`}>
+                            {event.status.replace('_', ' ')}
                           </span>
                         </div>
                         <p className="text-xs text-neutral-500 mt-1">
                           Triggered: {formatDateTime(event.timestamp)}
                         </p>
+                        {event.responderName && (
+                          <p className="text-xs font-semibold text-success-700 mt-1">
+                            {event.responderName} responded · Help is on the way
+                          </p>
+                        )}
                         {event.resolvedAt && (
                           <p className="text-xs text-neutral-500">
                             Resolved: {formatDateTime(event.resolvedAt)} by {event.resolvedBy}

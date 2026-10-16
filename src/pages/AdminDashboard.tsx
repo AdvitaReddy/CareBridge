@@ -9,6 +9,7 @@ import DashboardHeader from '@/components/DashboardHeader';
 import Disclaimer from '@/components/Disclaimer';
 import BridgeyHero from '@/components/BridgeyHero';
 import SharedTimeline from '@/components/SharedTimeline';
+import SOSBanner from '@/components/SOSBanner';
 
 interface AdminDashboardProps {
   onBack: () => void;
@@ -21,7 +22,7 @@ export default function AdminDashboard({ onBack }: AdminDashboardProps) {
     adminUsers, approveUser, rejectUser,
     caregivers, approveCaregiver, rejectCaregiver,
     medicines, appointments, sosEvents, careCircle,
-    runDemoAction, timelineEvents,
+    runDemoAction, runDemoSOSAction, timelineEvents,
   } = useApp();
   const [activeTab, setActiveTab] = useState<Tab>('stats');
   const [demoAction, setDemoAction] = useState<string | null>(null);
@@ -40,10 +41,28 @@ export default function AdminDashboard({ onBack }: AdminDashboardProps) {
     }
   };
 
+  const handleDemoSOSAction = async (action: 'demo_trigger_sos' | 'demo_escalate_sos') => {
+    setDemoAction(action);
+    setDemoError(null);
+    try {
+      await runDemoSOSAction(action);
+    } catch (error) {
+      console.error('Unable to run SOS demo action:', error);
+      const message = error instanceof Error
+        ? error.message
+        : typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string'
+          ? error.message
+          : 'Unable to run the SOS demo action.';
+      setDemoError(message);
+    } finally {
+      setDemoAction(null);
+    }
+  };
+
   const pendingCaregivers = caregivers.filter((c) => !c.verified);
   const activeUsers = adminUsers.filter((u) => u.status === 'active');
   const pendingUsers = adminUsers.filter((u) => u.status === 'pending');
-  const activeSOSCount = sosEvents.filter((s) => s.status === 'active').length;
+  const activeSOSCount = sosEvents.filter((s) => ['active', 'acknowledged', 'escalated'].includes(s.status)).length;
 
   const tabs: { id: Tab; label: string; icon: typeof Users }[] = [
     { id: 'stats', label: 'Statistics', icon: BarChart3 },
@@ -80,6 +99,7 @@ export default function AdminDashboard({ onBack }: AdminDashboardProps) {
       </div>
 
       <div className="lg:ml-64 max-w-7xl mx-auto px-6 md:px-12 py-6">
+        <div className="mb-6"><SOSBanner /></div>
         {/* Tabs */}
         <div className="flex gap-1 sm:gap-2 overflow-x-auto border-b border-neutral-200 mb-6">
           {tabs.map((tab) => (
@@ -164,6 +184,22 @@ export default function AdminDashboard({ onBack }: AdminDashboardProps) {
                   className="px-4 py-2.5 rounded-xl border border-neutral-300 text-neutral-700 font-semibold text-sm hover:bg-neutral-50 disabled:opacity-50"
                 >
                   Reset demo data
+                </button>
+                <button
+                  type="button"
+                  disabled={demoAction !== null}
+                  onClick={() => void handleDemoSOSAction('demo_trigger_sos')}
+                  className="px-4 py-2.5 rounded-xl bg-danger-600 text-white font-semibold text-sm hover:bg-danger-700 disabled:opacity-50"
+                >
+                  Trigger test SOS
+                </button>
+                <button
+                  type="button"
+                  disabled={demoAction !== null}
+                  onClick={() => void handleDemoSOSAction('demo_escalate_sos')}
+                  className="px-4 py-2.5 rounded-xl border border-danger-300 text-danger-700 font-semibold text-sm hover:bg-danger-50 disabled:opacity-50"
+                >
+                  Skip to escalation
                 </button>
               </div>
               {demoAction && <p className="text-xs text-neutral-500 mt-3">Running demo action…</p>}

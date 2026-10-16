@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import bridgeySvg from '@/assets/bridgey.svg?raw';
 import { useApp } from '@/context/AppContext';
 
@@ -21,20 +21,24 @@ export default function Bridgey({
 }: BridgeyProps) {
   const { bridgeyEvent, activeSOS } = useApp();
   const [isHeartPulsing, setIsHeartPulsing] = useState(false);
-  const [lastEventId, setLastEventId] = useState<number | null>(null);
+  const lastEventKey = useRef<string | null>(
+    bridgeyEvent ? `${bridgeyEvent.type}:${bridgeyEvent.id}` : null
+  );
 
   useEffect(() => {
-    if (!bridgeyEvent || bridgeyEvent.id === lastEventId) return;
-    setLastEventId(bridgeyEvent.id);
+    if (!bridgeyEvent) return;
+    const eventKey = `${bridgeyEvent.type}:${bridgeyEvent.id}`;
+    if (eventKey === lastEventKey.current) return;
+    lastEventKey.current = eventKey;
     if (bridgeyEvent.type === 'medicine-taken' || bridgeyEvent.type === 'medicines-complete' || bridgeyEvent.type === 'sos-resolved') {
       setIsHeartPulsing(true);
       const timer = window.setTimeout(() => setIsHeartPulsing(false), 1000);
       return () => window.clearTimeout(timer);
     }
-  }, [bridgeyEvent, lastEventId]);
+  }, [bridgeyEvent]);
 
   const expression = requestedExpression ?? (
-    activeSOS ? 'concerned' : bridgeyEvent?.type === 'sos-resolved' ? 'relieved' : isHeartPulsing ? 'excited' : 'happy'
+    activeSOS ? 'concerned' : isHeartPulsing ? 'excited' : 'happy'
   );
   const mascotClass = [
     'bridgey-inline',

@@ -7,6 +7,7 @@ import FamilyDashboard from '@/pages/FamilyDashboard';
 import CaregiverDashboard from '@/pages/CaregiverDashboard';
 import AdminDashboard from '@/pages/AdminDashboard';
 import BridgeyCelebration from '@/components/BridgeyCelebration';
+import SOSResolutionNotice from '@/components/SOSResolutionNotice';
 
 function AppContent() {
   const { profile, authLoading, signOut, setBridgeySection } = useApp();
@@ -84,6 +85,7 @@ function AppContent() {
     <>
       {page}
       <BridgeyCelebration />
+      <SOSResolutionNotice />
     </>
   );
 }

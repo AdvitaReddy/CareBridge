@@ -6,6 +6,8 @@ import DashboardHeader from '@/components/DashboardHeader';
 import Disclaimer from '@/components/Disclaimer';
 import BridgeyHero from '@/components/BridgeyHero';
 import SharedTimeline from '@/components/SharedTimeline';
+import SOSBanner from '@/components/SOSBanner';
+import SOSCountdownModal from '@/components/SOSCountdownModal';
 
 interface ElderlyDashboardProps {
   onBack: () => void;
@@ -13,11 +15,12 @@ interface ElderlyDashboardProps {
 
 export default function ElderlyDashboard({ onBack }: ElderlyDashboardProps) {
   const {
-    doses, appointments, triggerSOS, activeSOS, setSosConfirmationOpen,
+    doses, appointments, activeSOS,
     confirmDose, profile, careLoading, careError, timelineEvents,
   } = useApp();
-  const [showSOSConfirm, setShowSOSConfirm] = useState(false);
+  const [showSOSCountdown, setShowSOSCountdown] = useState(false);
   const [sosTriggered, setSosTriggered] = useState(false);
+  const [sosLocationUnavailable, setSosLocationUnavailable] = useState(false);
   const [doseError, setDoseError] = useState<string | null>(null);
 
   const actionableDoses = doses.filter((dose) => ['scheduled', 'due', 'missed'].includes(dose.status));
@@ -32,17 +35,14 @@ export default function ElderlyDashboard({ onBack }: ElderlyDashboardProps) {
       ? 'All done for today, great job!'
       : `You have ${medicinesRemaining} medicine${medicinesRemaining === 1 ? '' : 's'} to take today.`;
 
-  const handleSOS = () => {
-    triggerSOS();
+  const handleSOSTriggered = (locationUnavailable: boolean) => {
     setSosTriggered(true);
-    setShowSOSConfirm(false);
-    setSosConfirmationOpen(false);
+    setSosLocationUnavailable(locationUnavailable);
     setTimeout(() => setSosTriggered(false), 5000);
   };
 
   const openSOSConfirmation = () => {
-    setShowSOSConfirm(true);
-    setSosConfirmationOpen(true);
+    setShowSOSCountdown(true);
   };
 
   return (
@@ -66,20 +66,14 @@ export default function ElderlyDashboard({ onBack }: ElderlyDashboardProps) {
       {sosTriggered && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-40 bg-success-500 text-white px-6 py-3 rounded-2xl shadow-lg flex items-center gap-2 animate-slide-up">
           <Check className="w-5 h-5" />
-          <span className="font-semibold text-lg">SOS sent. Help is on the way.</span>
+          <span className="font-semibold text-lg">SOS sent.{sosLocationUnavailable ? ' Location unavailable.' : ' Help is on the way.'}</span>
         </div>
       )}
 
       {/* Active SOS banner */}
       {activeSOS && (
         <div className="max-w-7xl mx-auto px-6 md:px-12 mt-4">
-          <div className="bg-danger-600 text-white rounded-2xl p-5 flex items-center gap-4">
-            <AlertTriangle className="w-10 h-10 flex-shrink-0" />
-            <div>
-              <p className="font-display font-bold text-xl">SOS Active</p>
-              <p className="text-danger-50 text-base">Your family has been notified. Help is coming.</p>
-            </div>
-          </div>
+          <SOSBanner />
         </div>
       )}
 
@@ -238,38 +232,11 @@ export default function ElderlyDashboard({ onBack }: ElderlyDashboardProps) {
         <SharedTimeline events={timelineEvents} />
       </div>
 
-      {/* SOS Confirmation Modal */}
-      {showSOSConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-900/60 backdrop-blur-sm animate-fade-in">
-          <div className="card w-full max-w-sm p-6 text-center animate-slide-up">
-            <div className="w-20 h-20 rounded-full bg-danger-100 text-danger-600 flex items-center justify-center mx-auto mb-5">
-              <AlertTriangle className="w-12 h-12" />
-            </div>
-            <h2 className="font-display font-bold text-2xl text-neutral-800 mb-2">
-              Send SOS Alert?
-            </h2>
-            <p className="text-lg text-neutral-500 mb-6">
-              This will alert your family and caregiver immediately.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setShowSOSConfirm(false);
-                  setSosConfirmationOpen(false);
-                }}
-                className="flex-1 px-6 py-4 rounded-2xl border border-neutral-200 text-neutral-600 font-bold text-lg hover:bg-neutral-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSOS}
-                className="flex-1 px-6 py-4 rounded-2xl bg-danger-500 text-white font-bold text-lg hover:bg-danger-600 transition-colors active:scale-95"
-              >
-                Yes, Send SOS
-              </button>
-            </div>
-          </div>
-        </div>
+      {showSOSCountdown && (
+        <SOSCountdownModal
+          onClose={() => setShowSOSCountdown(false)}
+          onTriggered={handleSOSTriggered}
+        />
       )}
 
       <footer className="py-6">

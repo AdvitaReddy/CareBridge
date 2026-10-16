@@ -52,7 +52,10 @@ export default function NotificationCenter() {
               >
                 <span className="flex items-center justify-between gap-2">
                   <span className="text-xs font-semibold uppercase text-neutral-400">{notification.type.replace(/_/g, ' ')}</span>
-                  {notification.read && <Check className="w-3.5 h-3.5 text-success-600" aria-label="Read" />}
+                  <span className="flex items-center gap-2">
+                    {notification.priority === 'high' && <span className="text-[10px] font-bold uppercase text-danger-600">High priority</span>}
+                    {notification.read && <Check className="w-3.5 h-3.5 text-success-600" aria-label="Read" />}
+                  </span>
                 </span>
                 <span className="block text-sm text-neutral-800 mt-1">{notification.message}</span>
                 <span className="block text-xs text-neutral-400 mt-1">{formatDateTime(notification.created_at)}</span>

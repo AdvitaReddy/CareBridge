@@ -49,12 +49,16 @@ export default function BridgeyCelebration() {
   const { bridgeyEvent } = useApp();
   const [activeEvent, setActiveEvent] = useState<CelebrationEvent | null>(null);
   const [activeCopy, setActiveCopy] = useState<CelebrationCopy | null>(null);
-  const lastEvent = useRef<number | null>(null);
+  const lastEvent = useRef(
+    bridgeyEvent ? `${bridgeyEvent.type}:${bridgeyEvent.id}` : null
+  );
   const variantIndexes = useRef<Partial<Record<CelebrationEvent, number>>>({});
 
   useEffect(() => {
-    if (!bridgeyEvent || lastEvent.current === bridgeyEvent.id) return;
-    lastEvent.current = bridgeyEvent.id;
+    if (!bridgeyEvent) return;
+    const eventKey = `${bridgeyEvent.type}:${bridgeyEvent.id}`;
+    if (lastEvent.current === eventKey) return;
+    lastEvent.current = eventKey;
     if (bridgeyEvent.type === 'sos-triggered') {
       setActiveEvent(null);
       setActiveCopy(null);
@@ -68,6 +72,15 @@ export default function BridgeyCelebration() {
       setActiveCopy(variants[nextIndex]);
     }
   }, [bridgeyEvent]);
+
+  useEffect(() => {
+    if (activeEvent !== 'sos-resolved') return;
+    const timer = window.setTimeout(() => {
+      setActiveEvent(null);
+      setActiveCopy(null);
+    }, 6000);
+    return () => window.clearTimeout(timer);
+  }, [activeEvent]);
 
   if (!activeEvent || !activeCopy) return null;
 
