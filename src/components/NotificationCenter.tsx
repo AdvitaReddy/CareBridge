@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bell, Check, ClipboardList, FileText, X } from 'lucide-react';
+import { Bell, Calendar, Check, ClipboardList, FileText, X } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { formatDateTime } from '@/data/mockData';
 
@@ -7,6 +7,7 @@ const notificationPresentation: Record<string, { label: string; icon: typeof Bel
   caregiver_task: { label: 'Caregiver Task', icon: ClipboardList },
   task: { label: 'Caregiver Task', icon: ClipboardList },
   visit: { label: 'Visit', icon: FileText },
+  appointment: { label: 'Appointment', icon: Calendar },
 };
 
 export default function NotificationCenter() {

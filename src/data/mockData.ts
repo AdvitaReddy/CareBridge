@@ -22,6 +22,9 @@ export interface Appointment {
   location: string;
   notes: string;
   summary?: string;
+  status?: 'scheduled' | 'cancelled' | 'completed';
+  reminder24hSent?: boolean;
+  reminder1hSent?: boolean;
 }
 
 export type SOSSstatus = 'active' | 'acknowledged' | 'escalated' | 'resolved' | 'cancelled';

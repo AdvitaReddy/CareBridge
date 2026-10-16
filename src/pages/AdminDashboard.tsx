@@ -30,7 +30,7 @@ export default function AdminDashboard({ onBack }: AdminDashboardProps) {
   const [demoAction, setDemoAction] = useState<string | null>(null);
   const [demoError, setDemoError] = useState<string | null>(null);
 
-  const handleDemoAction = async (action: 'demo_make_next_dose_due' | 'demo_force_dose_missed' | 'reset_demo_data') => {
+  const handleDemoAction = async (action: 'demo_make_next_dose_due' | 'demo_force_dose_missed' | 'reset_demo_data' | 'demo_make_next_appointment_due') => {
     if (action === 'reset_demo_data' && !window.confirm('Reset today’s demo doses and their generated events?')) return;
     setDemoAction(action);
     setDemoError(null);
@@ -179,6 +179,14 @@ export default function AdminDashboard({ onBack }: AdminDashboardProps) {
                   className="px-4 py-2.5 rounded-xl bg-warning-500 text-white font-semibold text-sm hover:bg-warning-600 disabled:opacity-50"
                 >
                   Force dose to missed
+                </button>
+                <button
+                  type="button"
+                  disabled={demoAction !== null}
+                  onClick={() => void handleDemoAction('demo_make_next_appointment_due')}
+                  className="px-4 py-2.5 rounded-xl border border-secondary-300 text-secondary-700 font-semibold text-sm hover:bg-secondary-50 disabled:opacity-50"
+                >
+                  Make next appointment due in 1 hour
                 </button>
                 <button
                   type="button"

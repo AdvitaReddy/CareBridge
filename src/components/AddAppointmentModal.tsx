@@ -3,32 +3,40 @@ import { X } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import useFormFeedback from '@/hooks/useFormFeedback';
 import FormFeedbackMessage from '@/components/FormFeedbackMessage';
+import type { Appointment } from '@/data/mockData';
 
 interface AddAppointmentModalProps {
   onClose: () => void;
+  appointment?: Appointment;
 }
 
-export default function AddAppointmentModal({ onClose }: AddAppointmentModalProps) {
-  const { addAppointment } = useApp();
-  const [doctorName, setDoctorName] = useState('');
-  const [specialty, setSpecialty] = useState('');
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
-  const [location, setLocation] = useState('');
-  const [notes, setNotes] = useState('');
+export default function AddAppointmentModal({ onClose, appointment }: AddAppointmentModalProps) {
+  const { addAppointment, updateAppointment } = useApp();
+  const [doctorName, setDoctorName] = useState(appointment?.doctorName ?? '');
+  const [specialty, setSpecialty] = useState(appointment?.specialty ?? '');
+  const [date, setDate] = useState(appointment?.date ?? '');
+  const [time, setTime] = useState(appointment?.time ?? '');
+  const [location, setLocation] = useState(appointment?.location ?? '');
+  const [notes, setNotes] = useState(appointment?.notes ?? '');
   const { isSaving, success, error, clear, run } = useFormFeedback();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!doctorName.trim() || !date || !time) return;
-    const saved = await run(() => addAppointment({
+    const input = {
       doctorName: doctorName.trim(),
       specialty: specialty.trim() || 'General',
       date,
       time,
       location: location.trim(),
       notes: notes.trim(),
-    }), 'Added');
+    };
+    const saved = await run(
+      () => appointment
+        ? updateAppointment(appointment.id, input)
+        : addAppointment(input),
+      appointment ? 'Updated' : 'Added'
+    );
     if (!saved) return;
     setDoctorName('');
     setSpecialty('');
@@ -42,7 +50,7 @@ export default function AddAppointmentModal({ onClose }: AddAppointmentModalProp
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg-dark/60 backdrop-blur-sm animate-fade-in">
       <div className="card w-full max-w-md p-6 animate-slide-up max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="font-display font-bold text-lg text-neutral-800">Add Appointment</h2>
+          <h2 className="font-display font-bold text-lg text-neutral-800">{appointment ? 'Edit Appointment' : 'Add Appointment'}</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-neutral-100 transition-colors">
             <X className="w-5 h-5 text-neutral-500" />
           </button>
@@ -124,7 +132,7 @@ export default function AddAppointmentModal({ onClose }: AddAppointmentModalProp
               disabled={isSaving}
               className="flex-1 btn-primary px-4 py-2.5 disabled:opacity-60"
             >
-              {isSaving ? 'Saving...' : 'Add Appointment'}
+              {isSaving ? 'Saving...' : appointment ? 'Save Changes' : 'Add Appointment'}
             </button>
             <FormFeedbackMessage success={success} error={error} />
           </div>

@@ -19,11 +19,9 @@ import {
   type CareCircleMember,
   type AdminUser,
   type Role,
-  seedAppointments,
   seedTimeline,
   seedCaregivers,
   seedAdminUsers,
-  formatClockTime,
 } from '@/data/mockData';
 
 interface AppContextValue {
@@ -44,6 +42,7 @@ interface AppContextValue {
   careLoading: boolean;
   careError: string | null;
   taskError: string | null;
+  appointmentError: string | null;
   refreshCareData: () => Promise<void>;
   confirmDose: (doseId: string) => Promise<void>;
   addMedicine: (med: Pick<Medicine, 'name' | 'dosage' | 'times'>) => Promise<void>;
@@ -57,12 +56,14 @@ interface AppContextValue {
   addVisitNote: (taskId: string, note: string) => Promise<void>;
   addCareTimelineEvent: (type: string, message: string) => Promise<void>;
   markNotificationRead: (notificationId: string) => Promise<void>;
-  runDemoAction: (action: 'demo_make_next_dose_due' | 'demo_force_dose_missed' | 'reset_demo_data') => Promise<void>;
+  runDemoAction: (action: 'demo_make_next_dose_due' | 'demo_force_dose_missed' | 'reset_demo_data' | 'demo_make_next_appointment_due') => Promise<void>;
 
   // Appointments
   appointments: Appointment[];
-  addAppointment: (appt: Omit<Appointment, 'id'>) => void;
-  addAppointmentSummary: (id: string, summary: string) => void;
+  addAppointment: (appt: Omit<Appointment, 'id'>) => Promise<void>;
+  updateAppointment: (id: string, appt: Omit<Appointment, 'id'>) => Promise<void>;
+  cancelAppointment: (id: string) => Promise<void>;
+  addAppointmentSummary: (id: string, summary: string) => Promise<void>;
 
   // SOS
   sosEvents: SOSEvent[];
@@ -239,9 +240,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [careLoading, setCareLoading] = useState(false);
   const [careError, setCareError] = useState<string | null>(null);
   const [taskError, setTaskError] = useState<string | null>(null);
+  const [appointmentError, setAppointmentError] = useState<string | null>(null);
   const [tasks, setTasks] = useState<CareTask[]>([]);
   const [visitNotes, setVisitNotes] = useState<CareVisitNote[]>([]);
-  const [appointments, setAppointments] = useState<Appointment[]>(seedAppointments);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [sosEvents, setSosEvents] = useState<SOSEvent[]>([]);
   const [timeline, setTimeline] = useState<TimelineEntry[]>(seedTimeline);
   const [caregivers, setCaregivers] = useState<Caregiver[]>(seedCaregivers);
@@ -436,6 +438,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       timelineResult,
       taskResult,
       visitNoteResult,
+      appointmentResult,
     ] = await Promise.all([
       supabase.from('medicines').select('id, name, dosage, times').order('created_at'),
       supabase
@@ -458,6 +461,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         .select('id, task_id, care_circle_id, author, note, created_at')
         .eq('care_circle_id', profile.care_circle_id)
         .order('created_at', { ascending: false }),
+      supabase.from('appointments')
+        .select('id, doctor, specialty, scheduled_at, location, notes, status, reminder_24h_sent, reminder_1h_sent, visit_summary')
+        .eq('care_circle_id', profile.care_circle_id)
+        .order('scheduled_at'),
     ]);
 
     const queryError = medicineResult.error ?? doseResult.error ?? notificationResult.error ?? timelineResult.error;
@@ -502,6 +509,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setVisitNotes((visitNoteResult.data ?? []) as CareVisitNote[]);
     const relatedTaskError = taskResult.error ?? visitNoteResult.error;
     setTaskError(relatedTaskError?.message ?? null);
+    if (appointmentResult.error) {
+      console.error('Unable to load appointments:', appointmentResult.error);
+      setAppointmentError(appointmentResult.error.message);
+    } else {
+      setAppointments((appointmentResult.data ?? []).map((appointment) => {
+        const scheduledAt = new Date(appointment.scheduled_at);
+        return {
+          id: appointment.id,
+          doctorName: appointment.doctor,
+          specialty: appointment.specialty,
+          date: `${scheduledAt.getFullYear()}-${String(scheduledAt.getMonth() + 1).padStart(2, '0')}-${String(scheduledAt.getDate()).padStart(2, '0')}`,
+          time: `${String(scheduledAt.getHours()).padStart(2, '0')}:${String(scheduledAt.getMinutes()).padStart(2, '0')}`,
+          location: appointment.location,
+          notes: appointment.notes,
+          summary: appointment.visit_summary ?? undefined,
+          status: appointment.status,
+          reminder24hSent: appointment.reminder_24h_sent,
+          reminder1hSent: appointment.reminder_1h_sent,
+        };
+      }));
+      setAppointmentError(null);
+    }
     setCareError(null);
   }, [profile?.care_circle_id, profile?.id]);
 
@@ -773,7 +802,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setTimelineEvents([]);
       setTasks([]);
       setVisitNotes([]);
+      setAppointments([]);
       setTaskError(null);
+      setAppointmentError(null);
       setCareError(null);
       return;
     }
@@ -799,6 +830,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'timeline_events' }, () => void load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => void load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'visit_notes' }, () => void load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, () => void load())
       .subscribe((status, error) => {
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           console.error(`Care data Realtime subscription ${status.toLowerCase()}:`, error);
@@ -811,6 +843,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
       void supabase.removeChannel(channel);
     };
   }, [profile?.care_circle_id, profile?.id, refreshCareData]);
+
+  useEffect(() => {
+    if (!profile?.care_circle_id) return;
+    let active = true;
+    const refreshReminders = async () => {
+      const { data, error } = await supabase.rpc('refresh_appointment_reminders');
+      if (error) {
+        if (active) {
+          console.error('Unable to refresh appointment reminders:', error);
+          setAppointmentError(error.message);
+        }
+        return;
+      }
+      if (active && Number(data) > 0) {
+        try {
+          await refreshCareData();
+        } catch (refreshError) {
+          console.error('Unable to refresh appointments after sending reminders:', refreshError);
+        }
+      }
+    };
+    void refreshReminders();
+    const intervalId = window.setInterval(() => void refreshReminders(), 15_000);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, [profile?.care_circle_id, refreshCareData]);
 
   useEffect(() => {
     if (profile?.role !== 'admin') {
@@ -988,7 +1048,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await refreshCareData();
   }, [profile?.care_circle_id, profile?.id, refreshCareData]);
 
-  const runDemoAction = useCallback(async (action: 'demo_make_next_dose_due' | 'demo_force_dose_missed' | 'reset_demo_data') => {
+  const runDemoAction = useCallback(async (
+    action: 'demo_make_next_dose_due' | 'demo_force_dose_missed' | 'reset_demo_data' | 'demo_make_next_appointment_due',
+  ) => {
     const { error } = await supabase.rpc(action);
     if (error) throw error;
     await refreshCareData();
@@ -999,41 +1061,68 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTimeline((prev) => [newEntry, ...prev]);
   }, []);
 
-  const addAppointment = useCallback(
-    (appt: Omit<Appointment, 'id'>) => {
-      const newAppt: Appointment = { ...appt, id: genId('a') };
-      setAppointments((prev) =>
-        [...prev, newAppt].sort((a, b) => a.date.localeCompare(b.date))
-      );
-      emitBridgeyEvent('appointment-added', newAppt.id);
-      addTimelineEntry({
-        type: 'appointment',
-        title: `Appointment scheduled: ${appt.doctorName}`,
-        description: `${appt.specialty} on ${appt.date} at ${formatClockTime(appt.time)}, ${appt.location}`,
-        timestamp: new Date().toISOString(),
-        status: 'upcoming',
-      });
-    },
-    [addTimelineEntry, emitBridgeyEvent]
-  );
+  const addAppointment = useCallback(async (appt: Omit<Appointment, 'id'>) => {
+    if (!profile?.care_circle_id || !profile.id) throw new Error('No care circle is linked to this account.');
+    const { data, error } = await supabase.from('appointments').insert({
+      care_circle_id: profile.care_circle_id,
+      doctor: appt.doctorName.trim(),
+      specialty: appt.specialty.trim(),
+      scheduled_at: new Date(`${appt.date}T${appt.time}`).toISOString(),
+      location: appt.location.trim(),
+      notes: appt.notes.trim(),
+      created_by: profile.id,
+    }).select('id').single();
+    if (error) {
+      console.error('Unable to create appointment:', error);
+      throw error;
+    }
+    emitBridgeyEvent('appointment-added', data.id);
+    await refreshCareData();
+  }, [emitBridgeyEvent, profile?.care_circle_id, profile?.id, refreshCareData]);
 
-  const addAppointmentSummary = useCallback(
-    (id: string, summary: string) => {
-      setAppointments((prev) =>
-        prev.map((a) => (a.id === id ? { ...a, summary } : a))
-      );
-      const appt = appointments.find((a) => a.id === id);
-      if (appt) {
-        addTimelineEntry({
-          type: 'appointment',
-          title: `Post-visit notes added: ${appt.doctorName}`,
-          description: summary,
-          timestamp: new Date().toISOString(),
-        });
-      }
-    },
-    [appointments, addTimelineEntry]
-  );
+  const updateAppointment = useCallback(async (id: string, appt: Omit<Appointment, 'id'>) => {
+    const { error } = await supabase.from('appointments').update({
+      doctor: appt.doctorName.trim(),
+      specialty: appt.specialty.trim(),
+      scheduled_at: new Date(`${appt.date}T${appt.time}`).toISOString(),
+      location: appt.location.trim(),
+      notes: appt.notes.trim(),
+    }).eq('id', id).select('id').single();
+    if (error) {
+      console.error('Unable to update appointment:', error);
+      throw error;
+    }
+    await refreshCareData();
+  }, [refreshCareData]);
+
+  const cancelAppointment = useCallback(async (id: string) => {
+    const { error } = await supabase.from('appointments')
+      .update({ status: 'cancelled' })
+      .eq('id', id)
+      .eq('status', 'scheduled')
+      .select('id')
+      .single();
+    if (error) {
+      console.error('Unable to cancel appointment:', error);
+      throw error;
+    }
+    await refreshCareData();
+  }, [refreshCareData]);
+
+  const addAppointmentSummary = useCallback(async (id: string, summary: string) => {
+    const cleanSummary = summary.trim();
+    if (!cleanSummary) throw new Error('Enter a visit summary before saving.');
+    const { error } = await supabase.from('appointments')
+      .update({ visit_summary: cleanSummary })
+      .eq('id', id)
+      .select('id')
+      .single();
+    if (error) {
+      console.error('Unable to save appointment summary:', error);
+      throw error;
+    }
+    await refreshCareData();
+  }, [refreshCareData]);
 
   const triggerSOS = useCallback(async (location: { latitude: number | null; longitude: number | null }) => {
     if (!profile?.care_circle_id) throw new Error('No care circle is linked to this account.');
@@ -1151,6 +1240,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     careLoading,
     careError,
     taskError,
+    appointmentError,
     refreshCareData,
     confirmDose,
     addMedicine,
@@ -1167,6 +1257,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     runDemoAction,
     appointments,
     addAppointment,
+    updateAppointment,
+    cancelAppointment,
     addAppointmentSummary,
     sosEvents,
     sosCancelSeconds,
