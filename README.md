@@ -21,7 +21,7 @@ All four accounts belong to one demo care circle ("Rao Family"). The password fo
 | Role | Email | Name |
 |---|---|---|
 | Elderly | elderly@demo.com | Venkat Rao |
-| Family | family@demo.com | Ravi Rao |
+| Family | family@demo.com | Ananya Rao |
 | Caregiver | caregiver@demo.com | Lakshmi Devi |
 | Admin | admin@demo.com | Demo Admin |
 
